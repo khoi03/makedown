@@ -44,6 +44,7 @@ what makes the build spec a *literate* document.
 version: 0.1                 # spec version this document targets
 defaults:
   model: claude-opus-4-8     # default model for targets that omit one
+  system: You are precise.   # default system prompt (targets may override)
   params: { temperature: 0 } # default params, shallow-merged per target
   cache: deterministic       # default cache policy
 artifacts_dir: artifacts     # where output files are written (default: artifacts)
@@ -89,6 +90,7 @@ cache: deterministic
 | `inputs` | `string[]` | no | `[]` | Each entry is **either** a source path (relative file) **or** another target name. The engine classifies by matching against declared target names. |
 | `step` | enum | no | `chat` | `chat` \| `agent` \| `transform` \| `eval` \| `map` (see §6) |
 | `model` | string | for `chat`/`agent`/`eval` | front-matter default | Model id, optionally `provider:model` (see §4.1), e.g. `claude-opus-4-8`, `openai:gpt-5`. |
+| `system` | string | no | front-matter default | System prompt. May contain `{{ref}}` interpolations (see §5). Part of the identity hash. |
 | `params` | object | no | front-matter default | Model params (`temperature`, `seed`, `max_tokens`, …), shallow-merged over defaults. |
 | `output` | string | no | `<artifacts_dir>/<name>.md` | Path the compiled artifact is written to. |
 | `cache` | enum | no | `deterministic` | `deterministic` \| `stochastic(n=<k>)` \| `always` (see §7) |
@@ -136,6 +138,11 @@ Within a prompt body, `{{<ref>}}` interpolates a resolved input:
 Every `{{ref}}` used in the body **must** also appear in `inputs` (so the
 dependency graph is explicit and the identity hash is complete). Referencing an
 input not declared in `inputs` is a validation error.
+
+The `system` prompt (§4) is rendered the same way — its `{{ref}}`s are
+interpolated identically and must also be declared in `inputs`. Inspect the
+fully-rendered system + user prompt for any target with `md render <target>`
+(no model call, no tokens spent).
 
 ---
 
