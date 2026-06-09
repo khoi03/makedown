@@ -1,0 +1,13 @@
+{
+  "name": "@makedown/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "[COMMERCIAL] Collaborative Markdown editor + live DAG view + artifact viewer (React). Not Apache-2.0.",
+  "scripts": {
+    "build": "echo \"@makedown/web: commercial package — not yet implemented\"",
+    "typecheck": "echo \"noop\"",
+    "test": "echo \"noop\""
+  }
+}

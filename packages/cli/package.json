@@ -1,0 +1,25 @@
+{
+  "name": "@makedown/cli",
+  "version": "0.0.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": {
+    "md": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit",
+    "clean": "tsc -b --clean",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@makedown/engine": "workspace:*",
+    "@makedown/format": "workspace:*",
+    "@makedown/providers": "workspace:*",
+    "@makedown/shared": "workspace:*",
+    "commander": "^12.1.0"
+  }
+}

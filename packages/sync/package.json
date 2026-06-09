@@ -1,0 +1,13 @@
+{
+  "name": "@makedown/sync",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "[COMMERCIAL] Real-time collaboration (Yjs CRDT) + git-backed workspace sync. Not Apache-2.0.",
+  "scripts": {
+    "build": "echo \"@makedown/sync: commercial package — not yet implemented\"",
+    "typecheck": "echo \"noop\"",
+    "test": "echo \"noop\""
+  }
+}
