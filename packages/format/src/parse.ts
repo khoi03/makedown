@@ -151,9 +151,11 @@ function toTargetBlock(raw: RawTarget, fm: FrontMatter, strict: boolean): Target
   }
 
   const header = mergeDefaults(raw.name, parsed, fm);
+  assertStepRequirements(raw.name, header, raw.headingLine);
 
   if (strict) {
-    assertRefsDeclared(raw.name, [raw.body, header.system ?? ""], header.inputs, raw.headingLine);
+    const declaredRefs = header.step === "map" ? [...header.inputs, MAP_ITEM_REF] : header.inputs;
+    assertRefsDeclared(raw.name, [raw.body, header.system ?? ""], declaredRefs, raw.headingLine);
   }
 
   return { name: raw.name, header, body: raw.body };
@@ -175,6 +177,28 @@ function mergeDefaults(name: string, raw: RawRecipeHeader, fm: FrontMatter): Rec
     over: raw.over,
     schema: raw.schema,
   };
+}
+
+/**
+ * Built-in reference bound to the current list item inside a `map` step body
+ * (and system prompt). It need not be declared in `inputs`.
+ */
+export const MAP_ITEM_REF = "item";
+
+/** Validate that a step type carries the fields it cannot execute without (SPEC §4). */
+function assertStepRequirements(name: string, header: RecipeHeader, line: number): void {
+  if (header.step === "transform" && !header.transform) {
+    throw new BuildDocParseError(
+      `Target "${name}" uses step: transform but omits the "transform" script path`,
+      line,
+    );
+  }
+  if (header.step === "map" && !header.over) {
+    throw new BuildDocParseError(
+      `Target "${name}" uses step: map but omits the "over" input to fan out over`,
+      line,
+    );
+  }
 }
 
 /** Strip an optional `:fn(args)` transform suffix to get the bare ref. SPEC §5. */

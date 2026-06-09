@@ -12,6 +12,7 @@
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { refsInBody, bareRef } from "@makedown/format";
 import type { Provider } from "@makedown/providers";
 import type { BuildDoc, Provenance, ResolvedInput, TargetBlock } from "@makedown/shared";
@@ -66,6 +67,7 @@ export async function planBuild(doc: BuildDoc, ctx: BuildContext): Promise<Build
       inputHashes: inputs.map((i) => i.hash),
       header: target.header,
       body: target.body,
+      auxHashes: await auxHashesFor(target, ctx),
     });
     ids.set(name, id);
 
@@ -94,6 +96,27 @@ async function resolveInputs(
     }
   }
   return resolved;
+}
+
+/**
+ * Content hashes that influence a target's output but aren't declared inputs.
+ * For `transform`, the script's content is folded in so editing it rebuilds.
+ * Tolerant of a missing script (returns a sentinel) so `md status` still works;
+ * the build then fails with a clear error.
+ */
+async function auxHashesFor(
+  target: TargetBlock,
+  ctx: BuildContext,
+): Promise<readonly string[] | undefined> {
+  if (target.header.step === "transform" && target.header.transform) {
+    try {
+      const bytes = await readFile(join(ctx.workspaceDir, target.header.transform));
+      return [sha256(new Uint8Array(bytes))];
+    } catch {
+      return ["sha256:missing-transform-script"];
+    }
+  }
+  return undefined;
 }
 
 export interface BuildResult {
@@ -126,19 +149,36 @@ export async function runBuild(doc: BuildDoc, ctx: BuildContext): Promise<BuildR
   return { plan, built, reused };
 }
 
+/** Dispatch a stale target to the executor for its step type. */
 async function executeTarget(
   target: TargetBlock,
   tp: TargetPlan,
   ctx: BuildContext,
   outputs: ReadonlyMap<string, string>,
 ): Promise<void> {
-  if (target.header.step !== "chat") {
-    throw new NotImplementedError(
-      `step "${target.header.step}" is not implemented yet (target "${target.name}")`,
-    );
+  switch (target.header.step) {
+    case "chat":
+      return executeModelStep(target, tp, ctx, outputs);
+    case "transform":
+      return executeTransform(target, tp, ctx, outputs);
+    default:
+      throw new NotImplementedError(
+        `step "${target.header.step}" is not implemented yet (target "${target.name}")`,
+      );
   }
+}
+
+/** Run a single model inference (`chat`) and record provenance. */
+async function executeModelStep(
+  target: TargetBlock,
+  tp: TargetPlan,
+  ctx: BuildContext,
+  outputs: ReadonlyMap<string, string>,
+): Promise<void> {
   if (!ctx.provider) {
-    throw new Error(`No provider configured; cannot execute chat target "${target.name}"`);
+    throw new Error(
+      `No provider configured; cannot execute ${target.header.step} target "${target.name}"`,
+    );
   }
 
   const prompt = await renderTemplate(target.body, ctx, outputs, false);
@@ -170,9 +210,106 @@ async function executeTarget(
     tokens: result.usage,
     costUsd: result.costUsd,
     durationMs,
-    producedAt: (ctx.now?.() ?? new Date()).toISOString(),
+    producedAt: timestamp(ctx),
   };
   await ctx.cas.putProvenance(provenance);
+}
+
+/**
+ * Run a deterministic workspace script (`transform`) at zero token cost — the
+ * "code where code is enough" step. The script is a workspace-authored ES module
+ * (trusted like a Makefile recipe) that exports a function over the resolved
+ * input contents. Its content is part of the target's identity hash, so editing
+ * the script rebuilds the artifact.
+ */
+async function executeTransform(
+  target: TargetBlock,
+  tp: TargetPlan,
+  ctx: BuildContext,
+  outputs: ReadonlyMap<string, string>,
+): Promise<void> {
+  const script = await loadTransform(target, ctx);
+  const inputs = await resolveInputContents(target, ctx, outputs);
+
+  const start = Date.now();
+  const produced = await script.fn(inputs);
+  const durationMs = Date.now() - start;
+
+  const content = toBytes(produced, target.name);
+  await ctx.cas.put(tp.id, content);
+  await writeOutput(ctx, target.header.output, content);
+
+  const provenance: Provenance = {
+    target: target.name,
+    id: tp.id,
+    output: target.header.output,
+    step: "transform",
+    model: target.header.model,
+    params: target.header.params,
+    inputs: tp.inputs,
+    promptHash: script.hash,
+    costUsd: 0,
+    durationMs,
+    producedAt: timestamp(ctx),
+  };
+  await ctx.cas.putProvenance(provenance);
+}
+
+interface LoadedTransform {
+  readonly fn: (inputs: Record<string, string>) => unknown;
+  readonly hash: string;
+}
+
+/** Import a transform script, returning its exported function and content hash. */
+async function loadTransform(target: TargetBlock, ctx: BuildContext): Promise<LoadedTransform> {
+  const rel = target.header.transform;
+  if (!rel) {
+    throw new Error(`Target "${target.name}" step=transform requires a "transform" script path`);
+  }
+  const absPath = join(ctx.workspaceDir, rel);
+  let bytes: Uint8Array;
+  try {
+    bytes = new Uint8Array(await readFile(absPath));
+  } catch {
+    throw new Error(`Transform script not found: ${rel} (target "${target.name}")`);
+  }
+  const hash = sha256(bytes);
+  // Cache-bust the ESM import by content hash so an edited script re-imports.
+  const url = `${pathToFileURL(absPath).href}?v=${hash.slice("sha256:".length)}`;
+  const mod = (await import(url)) as Record<string, unknown>;
+  const fn = mod["default"] ?? mod["transform"];
+  if (typeof fn !== "function") {
+    throw new Error(
+      `Transform "${rel}" must export a function (default export or named "transform")`,
+    );
+  }
+  return { fn: fn as LoadedTransform["fn"], hash };
+}
+
+/** Resolve every declared input to its string content (for transform scripts). */
+async function resolveInputContents(
+  target: TargetBlock,
+  ctx: BuildContext,
+  outputs: ReadonlyMap<string, string>,
+): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  for (const input of target.header.inputs) {
+    const ref = bareRef(input);
+    out[ref] = await readRefContent(ref, ctx, outputs);
+  }
+  return out;
+}
+
+function toBytes(produced: unknown, targetName: string): Uint8Array {
+  if (produced instanceof Uint8Array) return produced;
+  if (typeof produced === "string") return new TextEncoder().encode(produced);
+  throw new Error(
+    `Transform for "${targetName}" must return a string or Uint8Array (got ${typeof produced})`,
+  );
+}
+
+function timestamp(ctx: BuildContext): string {
+  return (ctx.now?.() ?? new Date()).toISOString();
 }
 
 /** Reused target: write its cached artifact back to the output path if needed. */
