@@ -5,14 +5,16 @@ export {
   planBuild,
   runBuild,
   renderTarget,
-  estimateBuildCost,
-  estimateTokens,
   NotImplementedError,
   type BuildContext,
   type BuildPlan,
   type TargetPlan,
   type BuildResult,
   type RenderedPrompt,
+} from "./build.js";
+export {
+  estimateBuildCost,
+  estimateTokens,
   type TargetCost,
   type BuildCost,
-} from "./build.js";
+} from "./cost.js";

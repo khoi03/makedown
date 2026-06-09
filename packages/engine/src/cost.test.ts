@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { parseBuildDoc } from "@makedown/format";
-import { estimateBuildCost, estimateTokens } from "./build.js";
+import { estimateBuildCost, estimateTokens } from "./cost.js";
 import { FakeProvider, makeWorkspace, type Workspace } from "./_testkit.js";
 
 let ws: Workspace;
