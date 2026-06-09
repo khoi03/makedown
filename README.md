@@ -13,10 +13,18 @@ changed.
 ```bash
 md build            # incremental build — only stale targets recompute
 md status           # what's stale and why
+md graph            # the dependency DAG in execution order
+md render <target>  # the exact system + user prompt a target would send — no tokens spent
 md why <target>     # full provenance: inputs, prompt, model, params, cost, tokens
-md cost --dry-run   # estimate $ / tokens before running
-md share <target>   # read-only shareable artifact link
+md cost             # what a build would run (dry estimate)
+md share <target>   # read-only shareable artifact link (planned)
 ```
+
+Each target can set a `system:` prompt (or inherit a workspace default); both the
+system and user prompts support `{{ref}}` interpolation. Models are chosen per
+target via `provider:model` (e.g. `anthropic:claude-opus-4-8`, `openai:gpt-5`),
+with keys/base-URLs from a workspace `.env` — so one workspace can compare models
+across providers (see `examples/compare`).
 
 ## Why this exists
 
