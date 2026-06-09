@@ -16,7 +16,7 @@ md status           # what's stale and why
 md graph            # the dependency DAG in execution order
 md render <target>  # the exact system + user prompt a target would send — no tokens spent
 md why <target>     # full provenance: inputs, prompt, model, params, cost, tokens
-md cost             # what a build would run (dry estimate)
+md cost             # estimated token/$ upper bound before running (no model calls)
 md share <target>   # read-only shareable artifact link (planned)
 ```
 
@@ -25,6 +25,28 @@ system and user prompts support `{{ref}}` interpolation. Models are chosen per
 target via `provider:model` (e.g. `anthropic:claude-opus-4-8`, `openai:gpt-5`),
 with keys/base-URLs from a workspace `.env` — so one workspace can compare models
 across providers (see `examples/compare`).
+
+## Step types
+
+A target's `step` decides how it computes (see [`SPEC.md`](./SPEC.md) §6):
+
+| `step` | What it does | Tokens |
+|---|---|---|
+| `chat` | One model inference with the rendered prompt. | yes |
+| `eval` | Score/grade an input; with a `schema`, the output must be valid JSON. | yes |
+| `map` | Fan a prompt out `over` a list (`{{item}}` per element), collected into one JSON array. | per item |
+| `transform` | Run a deterministic workspace script — *"code where code is enough."* | **zero** |
+| `agent` | Coding agent in a sandbox (not implemented yet — Phase 1). | yes |
+
+The `cache` policy is per target: `deterministic` (cached by identity hash),
+`stochastic(n=k)` (store k samples, surface variance, consume a "blessed" one), or
+`always` (never cached).
+
+> **Security — `transform` runs code.** A `transform` script is workspace-authored
+> code that the engine imports and executes in-process, exactly like a `make`
+> recipe. Only build a `build.md` you trust. The `sandbox` field is advisory today;
+> true worktree/container isolation (and running untrusted workspaces) is future
+> work.
 
 ## Why this exists
 
@@ -65,9 +87,13 @@ makedown/
 
 ## Status
 
-Pre-build scaffold. **Phase 0** = prove the headless incremental engine on a toy
-3-target `build.md` (edit one source → only affected targets recompute; `md why`
-shows provenance; no-op rebuild costs zero tokens). Engine = TypeScript.
+**Phase 0 (engine spike) + most of Phase 1 are done.** The headless incremental
+engine is proven (edit one source → only affected targets recompute; `md why`
+shows provenance; a no-op rebuild costs zero tokens). Phase 1 adds the `transform`,
+`eval`, and `map` step types, the `stochastic(n=k)` cache policy, real `md cost`
+token/$ estimation, and a polished CLI. Remaining: the `agent` step (coding agent
+in a worktree + approval gate) and the commercial collaboration layer. Engine =
+TypeScript. 97 tests; engine ~96% / CLI ~80% statement coverage.
 
 ## Develop
 

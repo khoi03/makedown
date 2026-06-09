@@ -312,13 +312,19 @@ The open-core decision splits the monorepo by license. Keep this boundary clean 
 - ✅ **System prompts + `md render`**: targets (and front-matter defaults) accept a `system:` field; both system and user prompts support `{{ref}}` interpolation and are part of the identity hash. `md render <target>` prints the exact system + user prompt a target would send — no model call, no tokens — with unbuilt dependency artifacts shown as placeholders.
 - ✅ **Tests + coverage**: 46 tests. Coverage — engine ~99% / providers ~92% / format ~89% statements (all >80%).
 
-### Remaining for a real end-to-end run
-- Smoke-test `md build` against a live API (Anthropic or any OpenAI-compatible endpoint). The `.env` → router → adapter chain is verified (incl. a dead-port failure test); only an actual paid/authenticated call is unrun.
+### Done (Phase 1 — 2026-06-09, TDD)
+- ✅ **`transform` step** — deterministic, zero-token. A workspace-authored ES module (default or named `transform` export) runs over resolved input contents; its content folds into the identity hash (via `auxHashes`) so editing it rebuilds. Trusted code (in-process import), documented in SPEC §6 / README; `sandbox` enforcement is future.
+- ✅ **`eval` step** — shares the model-call path, records `step: eval`; with a declared `schema`, output must be valid JSON (full JSON-Schema conformance deferred, SPEC §11).
+- ✅ **`map` step** — fans `over` a list (JSON array or newline-delimited), one call per item with built-in `{{item}}` bound, collected into one JSON-array artifact; tokens/cost summed. Parser validates `over` is present and declared in `inputs`.
+- ✅ **`stochastic(n=k)` cache** — CAS stores up to k sibling samples under one identity hash; stale until k exist (tops up only missing samples after an interruption); a blessed pointer (default 0) materializes the canonical artifact downstream targets consume. Parser rejects stochastic on non-model steps and n<1.
+- ✅ **Real `md cost`** — headless `estimateBuildCost`: input tokens from rendered prompts (~4 chars/token), output = `max_tokens` upper bound, priced via the provider table; per-target table + upper-bound total over stale model targets; unknown models flagged.
+- ✅ **Aesthetic CLI** — dependency-free ANSI styler (NO_COLOR/FORCE_COLOR/TTY aware) + pure string renderers (separated from IO for testability). `md why` now shows step, cache policy, stochastic sample counts, short input hashes, duration. `md build` no longer needs a provider for transform-only builds.
+- ✅ **Refactor** — extracted `template.ts` (interpolation/list parsing) and `cost.ts` from `build.ts` (775→529 lines). **97 tests**; engine ~96% / CLI ~80% statement coverage. Reviewed (code-review + verification-loop + source security pass): no CRITICAL/HIGH; transform code-execution trust model documented.
 
-### Next milestones (Phase 1+)
-1. Remaining step types: `transform` (zero-token deterministic), `eval`, `map` (fan-out), and the `agent` step (coding agent in a worktree + approval gate).
-2. `stochastic(n=k)` cache policy: store N samples, surface variance, pin a "blessed" sample.
-3. `md why` provenance display polish + `md cost` real estimation (token-count pre-pass).
+### Remaining
+1. **`agent` step** (deferred this pass) — coding agent (Claude Agent SDK) in an isolated worktree/container + approval gate. Largest remaining Phase 1 item; needs the SDK, git worktree lifecycle, and an enforced sandbox.
+2. Smoke-test the model steps against a live API (the `.env` → router → adapter chain is verified incl. a dead-port failure test; transform/eval/map executors are unit-tested with a fake provider — only a paid/authenticated `chat`/`eval`/`map` call is unrun).
+3. Sandbox enforcement (worktree/container) so untrusted `build.md` can run safely; optional `map` fan-out cap.
 4. **Commercial layer**: Yjs collaborative editor (`packages/web`) + git-backed sync (`packages/sync`) + `apps/server`.
 
 ---

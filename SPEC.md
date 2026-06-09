@@ -159,6 +159,14 @@ fully-rendered system + user prompt for any target with `md render <target>`
 `agent` artifacts default to `cache: always` and should usually set
 `approval: required` (non-deterministic, side-effectful).
 
+> **Security model.** `transform` (and, later, `agent`) execute code: the engine
+> imports a `transform` script as an ES module and runs it **in-process**, exactly
+> like a `make` recipe runs shell. A `build.md` is therefore trusted input — only
+> build one you control. The `sandbox` field (`worktree`/`container`/`none`) is
+> **advisory** in the current OSS engine; enforced isolation, and the ability to
+> run untrusted workspaces safely, are future work. Source/output/script paths are
+> resolved relative to the workspace and are likewise trusted.
+
 ---
 
 ## 7. Cache policy & determinism
