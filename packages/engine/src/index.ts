@@ -4,9 +4,11 @@ export { buildGraph, GraphError, type BuildGraph, type GraphNode } from "./graph
 export {
   planBuild,
   runBuild,
+  renderTarget,
   NotImplementedError,
   type BuildContext,
   type BuildPlan,
   type TargetPlan,
   type BuildResult,
+  type RenderedPrompt,
 } from "./build.js";

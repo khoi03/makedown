@@ -6,6 +6,7 @@ import {
   cmdCost,
   cmdGraph,
   cmdInit,
+  cmdRender,
   cmdStatus,
   cmdWhy,
 } from "./commands.js";
@@ -40,6 +41,13 @@ program
   .description("Print the build graph in execution order")
   .argument("[dir]", "workspace directory")
   .action(cmdGraph);
+
+program
+  .command("render")
+  .description("Print the exact system + user prompt a target would send (no model call)")
+  .argument("<target>", "target name")
+  .argument("[dir]", "workspace directory")
+  .action(cmdRender);
 
 program
   .command("why")

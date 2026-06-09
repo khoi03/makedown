@@ -26,6 +26,8 @@ export interface RecipeHeader {
   readonly inputs: readonly string[];
   readonly step: StepType;
   readonly model?: string;
+  /** System prompt for the model. May contain `{{ref}}` interpolations. */
+  readonly system?: string;
   readonly params: Readonly<Record<string, unknown>>;
   readonly output: string;
   readonly cache: CachePolicy;
@@ -50,6 +52,7 @@ export interface FrontMatter {
   readonly version?: string;
   readonly defaults?: {
     readonly model?: string;
+    readonly system?: string;
     readonly params?: Readonly<Record<string, unknown>>;
     readonly cache?: CachePolicy;
   };

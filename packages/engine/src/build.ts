@@ -141,10 +141,14 @@ async function executeTarget(
     throw new Error(`No provider configured; cannot execute chat target "${target.name}"`);
   }
 
-  const prompt = await renderPrompt(target, ctx, outputs);
+  const prompt = await renderTemplate(target.body, ctx, outputs, false);
+  const system = target.header.system
+    ? await renderTemplate(target.header.system, ctx, outputs, false)
+    : undefined;
   const start = Date.now();
   const result = await ctx.provider.complete({
     model: target.header.model ?? "",
+    system,
     prompt,
     params: target.header.params,
   });
@@ -185,19 +189,55 @@ async function writeOutput(ctx: BuildContext, output: string, content: Uint8Arra
 
 const REF_RE = /\{\{\s*([^}]+?)\s*\}\}/g;
 
-/** Render a prompt body by interpolating `{{ref}}` (and `{{ref:head(n)}}`) inputs. */
-async function renderPrompt(
-  target: TargetBlock,
+/**
+ * Render a template (a prompt body or system prompt) by interpolating `{{ref}}`
+ * (and `{{ref:head(n)}}`). When `previewMissingTargets` is true, an unbuilt
+ * dependency artifact renders as a placeholder instead of throwing — used by
+ * `md render` so prompts can be inspected before a build.
+ */
+async function renderTemplate(
+  text: string,
   ctx: BuildContext,
   outputs: ReadonlyMap<string, string>,
+  previewMissingTargets: boolean,
 ): Promise<string> {
   void refsInBody; // refs were validated at parse time; we substitute live matches here
-  return replaceAsync(target.body, REF_RE, async (inner) => {
-    const ref = bareRef(inner.trim());
-    const suffix = suffixOf(inner.trim());
-    const content = await readRefContent(ref, ctx, outputs);
-    return applySuffix(content, suffix);
+  return replaceAsync(text, REF_RE, async (inner) => {
+    const trimmed = inner.trim();
+    const ref = bareRef(trimmed);
+    const suffix = suffixOf(trimmed);
+    try {
+      const content = await readRefContent(ref, ctx, outputs);
+      return applySuffix(content, suffix);
+    } catch (err) {
+      if (previewMissingTargets && outputs.has(ref)) return `«unbuilt artifact: ${ref}»`;
+      throw err;
+    }
   });
+}
+
+export interface RenderedPrompt {
+  readonly system?: string;
+  readonly prompt: string;
+}
+
+/**
+ * Resolve the exact system + user prompt a target would send, without calling a
+ * model. Unbuilt dependency artifacts render as placeholders. Powers `md render`.
+ */
+export async function renderTarget(
+  doc: BuildDoc,
+  name: string,
+  ctx: BuildContext,
+): Promise<RenderedPrompt> {
+  const target = doc.targets.find((t) => t.name === name);
+  if (!target) throw new Error(`Unknown target: ${name}`);
+  const outputs = new Map(doc.targets.map((t) => [t.name, t.header.output] as const));
+  const prompt = await renderTemplate(target.body, ctx, outputs, true);
+  const system = target.header.system
+    ? await renderTemplate(target.header.system, ctx, outputs, true)
+    : undefined;
+  return { system, prompt };
 }
 
 async function readRefContent(

@@ -7,6 +7,8 @@ import type { TokenUsage } from "@makedown/shared";
 
 export interface CompletionRequest {
   readonly model: string;
+  /** Optional system prompt. */
+  readonly system?: string;
   readonly prompt: string;
   readonly params: Readonly<Record<string, unknown>>;
 }

@@ -27,8 +27,18 @@ describe("estimateCostUsd", () => {
     expect(estimateCostUsd("claude-sonnet-4-6", 500_000, 0)).toBe(1.5);
   });
 
+  it("matches gateway-prefixed and Bedrock-style model ids", () => {
+    // "cc/claude-sonnet-4-6" -> sonnet ($3 in): 1M input = $3
+    expect(estimateCostUsd("cc/claude-sonnet-4-6", 1_000_000, 0)).toBe(3);
+    // Bedrock vendor dot prefix -> opus ($5/$25): $30
+    expect(estimateCostUsd("anthropic.claude-opus-4-8", 1_000_000, 1_000_000)).toBe(30);
+    // multi-segment gateway path -> haiku ($5 out): 1M output = $5
+    expect(estimateCostUsd("proxy/v1/claude-haiku-4-5", 0, 1_000_000)).toBe(5);
+  });
+
   it("returns undefined for an unknown model (never fabricates a price)", () => {
     expect(estimateCostUsd("some-future-model", 100, 100)).toBeUndefined();
+    expect(estimateCostUsd("cc/totally-unknown", 100, 100)).toBeUndefined();
   });
 });
 
@@ -74,6 +84,20 @@ describe("AnthropicProvider.complete", () => {
     expect(arg).not.toHaveProperty("temperature");
     expect(arg).not.toHaveProperty("seed");
     expect(arg["messages"]).toEqual([{ role: "user", content: "the prompt" }]);
+  });
+
+  it("passes a system prompt when provided, and omits it otherwise", async () => {
+    createMock.mockResolvedValue({
+      content: [{ type: "text", text: "x" }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+    const provider = new AnthropicProvider({ apiKey: "test-key" });
+
+    await provider.complete({ model: "claude-opus-4-8", prompt: "u", params: {}, system: "be terse" });
+    expect((createMock.mock.calls[0]![0] as Record<string, unknown>)["system"]).toBe("be terse");
+
+    await provider.complete({ model: "claude-opus-4-8", prompt: "u", params: {} });
+    expect(createMock.mock.calls[1]![0] as Record<string, unknown>).not.toHaveProperty("system");
   });
 
   it("honors a params.max_tokens override", async () => {

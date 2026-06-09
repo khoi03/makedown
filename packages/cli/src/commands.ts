@@ -1,7 +1,7 @@
 /** Implementations behind the `md` subcommands. */
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { planBuild, runBuild } from "@makedown/engine";
+import { planBuild, runBuild, renderTarget } from "@makedown/engine";
 import { loadDoc, makeContext, resolveDir, hasAnyProvider, BUILD_FILE } from "./workspace.js";
 import { loadEnv } from "./env.js";
 
@@ -86,6 +86,24 @@ export async function cmdWhy(name: string, dirArg?: string): Promise<void> {
   } else {
     console.log("(no provenance yet — run `md build`)");
   }
+}
+
+export async function cmdRender(name: string, dirArg?: string): Promise<void> {
+  const dir = resolveDir(dirArg);
+  loadEnv(dir);
+  const doc = await loadDoc(dir);
+  const { system, prompt } = await renderTarget(doc, name, makeContext(dir));
+
+  if (system !== undefined) {
+    console.log("─── system ───");
+    console.log(system);
+    console.log("");
+  }
+  console.log("─── prompt (user) ───");
+  console.log(prompt);
+
+  const total = (system?.length ?? 0) + prompt.length;
+  console.log(`\n(${total} characters across system + prompt; no tokens spent)`);
 }
 
 export async function cmdCost(dirArg?: string): Promise<void> {

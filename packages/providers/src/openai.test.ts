@@ -50,6 +50,18 @@ describe("OpenAICompatibleProvider", () => {
     expect(init.headers).toMatchObject({ authorization: "Bearer k" });
   });
 
+  it("prepends a system message when provided", async () => {
+    fetchMock.mockResolvedValue(okResponse({ choices: [{ message: { content: "x" } }], usage: {} }));
+    const provider = new OpenAICompatibleProvider({ apiKey: "k" });
+    await provider.complete({ model: "m", prompt: "u", params: {}, system: "be terse" });
+
+    const [, init] = fetchMock.mock.calls[0]! as [string, RequestInit];
+    expect(JSON.parse(init.body as string).messages).toEqual([
+      { role: "system", content: "be terse" },
+      { role: "user", content: "u" },
+    ]);
+  });
+
   it("defaults the base URL and max_tokens", async () => {
     fetchMock.mockResolvedValue(okResponse({ choices: [{ message: { content: "x" } }], usage: {} }));
     const provider = new OpenAICompatibleProvider({ apiKey: "k" });

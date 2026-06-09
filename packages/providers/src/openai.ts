@@ -37,7 +37,10 @@ export class OpenAICompatibleProvider implements Provider {
       },
       body: JSON.stringify({
         model: request.model,
-        messages: [{ role: "user", content: request.prompt }],
+        messages: [
+          ...(request.system ? [{ role: "system", content: request.system }] : []),
+          { role: "user", content: request.prompt },
+        ],
         max_tokens: resolveMaxTokens(request.params),
       }),
     });

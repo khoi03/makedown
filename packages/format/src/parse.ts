@@ -71,6 +71,7 @@ function normalizeFrontMatter(frontMatterText?: string): FrontMatter {
     defaults: raw.defaults
       ? {
           model: raw.defaults.model,
+          system: raw.defaults.system,
           params: raw.defaults.params,
           cache: raw.defaults.cache ? parseCachePolicy(raw.defaults.cache) : undefined,
         }
@@ -152,7 +153,7 @@ function toTargetBlock(raw: RawTarget, fm: FrontMatter, strict: boolean): Target
   const header = mergeDefaults(raw.name, parsed, fm);
 
   if (strict) {
-    assertRefsDeclared(raw.name, raw.body, header.inputs, raw.headingLine);
+    assertRefsDeclared(raw.name, [raw.body, header.system ?? ""], header.inputs, raw.headingLine);
   }
 
   return { name: raw.name, header, body: raw.body };
@@ -163,6 +164,7 @@ function mergeDefaults(name: string, raw: RawRecipeHeader, fm: FrontMatter): Rec
     inputs: raw.inputs,
     step: raw.step,
     model: raw.model ?? fm.defaults?.model,
+    system: raw.system ?? fm.defaults?.system,
     params: { ...(fm.defaults?.params ?? {}), ...raw.params },
     output: raw.output ?? `${fm.artifactsDir}/${name}.md`,
     cache: raw.cache ? parseCachePolicy(raw.cache) : (fm.defaults?.cache ?? { kind: "deterministic" }),
@@ -192,17 +194,19 @@ export function refsInBody(body: string): string[] {
 
 function assertRefsDeclared(
   name: string,
-  body: string,
+  texts: readonly string[],
   inputs: readonly string[],
   line: number,
 ): void {
   const declared = new Set(inputs.map(bareRef));
-  for (const ref of refsInBody(body)) {
-    if (!declared.has(ref)) {
-      throw new BuildDocParseError(
-        `Target "${name}" references {{${ref}}} which is not declared in inputs`,
-        line,
-      );
+  for (const text of texts) {
+    for (const ref of refsInBody(text)) {
+      if (!declared.has(ref)) {
+        throw new BuildDocParseError(
+          `Target "${name}" references {{${ref}}} which is not declared in inputs`,
+          line,
+        );
+      }
     }
   }
 }

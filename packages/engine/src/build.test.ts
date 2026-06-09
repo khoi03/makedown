@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { parseBuildDoc } from "@makedown/format";
 import type { CompletionRequest, CompletionResult, Provider } from "@makedown/providers";
 import { LocalCas } from "./cas.js";
-import { planBuild, runBuild, type BuildContext } from "./build.js";
+import { planBuild, runBuild, renderTarget, type BuildContext } from "./build.js";
 
 class FakeProvider implements Provider {
   readonly id = "fake";
@@ -127,6 +127,15 @@ describe("runBuild", () => {
     await expect(runBuild(doc, ctx(undefined))).rejects.toThrow(/No provider/);
   });
 
+  it("passes a rendered system prompt to the provider", async () => {
+    const doc = parseBuildDoc(
+      `---\ndefaults: { model: claude-opus-4-8, system: "You are terse." }\nartifacts_dir: artifacts\n---\n## target: summary\n\`\`\`yaml\ninputs: [sources/notes.md]\nstep: chat\n\`\`\`\nSummary of {{sources/notes.md}}.\n`,
+    );
+    const provider = new FakeProvider();
+    await runBuild(doc, ctx(provider));
+    expect(provider.calls[0]!.system).toBe("You are terse.");
+  });
+
   it("applies a head(n) body-transform suffix", async () => {
     await writeFile(join(dir, "sources", "lines.md"), "one\ntwo\nthree", "utf8");
     const doc = parseBuildDoc(
@@ -136,5 +145,22 @@ describe("runBuild", () => {
     await runBuild(doc, ctx(provider));
 
     expect(provider.calls[0]!.prompt).toBe("First: one\ntwo");
+  });
+});
+
+describe("renderTarget", () => {
+  it("returns the system + interpolated user prompt without a provider", async () => {
+    const doc = parseBuildDoc(
+      `---\ndefaults: { system: "You are terse." }\nartifacts_dir: artifacts\n---\n## target: summary\n\`\`\`yaml\ninputs: [sources/notes.md]\nstep: chat\nmodel: claude-opus-4-8\n\`\`\`\nSummary of {{sources/notes.md}}.\n`,
+    );
+    const { system, prompt } = await renderTarget(doc, "summary", ctx());
+    expect(system).toBe("You are terse.");
+    expect(prompt).toBe("Summary of hello world.");
+  });
+
+  it("shows a placeholder for an unbuilt dependency artifact", async () => {
+    const doc = parseBuildDoc(DOC); // summary -> checklist, nothing built
+    const { prompt } = await renderTarget(doc, "checklist", ctx());
+    expect(prompt).toBe("From «unbuilt artifact: summary» make a list.");
   });
 });

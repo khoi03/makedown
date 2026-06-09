@@ -16,6 +16,7 @@ export const recipeHeaderSchema = z
     inputs: z.array(z.string()).default([]),
     step: stepSchema.default("chat"),
     model: z.string().optional(),
+    system: z.string().optional(),
     params: z.record(z.unknown()).default({}),
     output: z.string().optional(),
     cache: z.string().optional(),
@@ -34,6 +35,7 @@ export const frontMatterSchema = z
     defaults: z
       .object({
         model: z.string().optional(),
+        system: z.string().optional(),
         params: z.record(z.unknown()).optional(),
         cache: z.string().optional(),
       })
