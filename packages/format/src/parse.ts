@@ -193,11 +193,19 @@ function assertStepRequirements(name: string, header: RecipeHeader, line: number
       line,
     );
   }
-  if (header.step === "map" && !header.over) {
-    throw new BuildDocParseError(
-      `Target "${name}" uses step: map but omits the "over" input to fan out over`,
-      line,
-    );
+  if (header.step === "map") {
+    if (!header.over) {
+      throw new BuildDocParseError(
+        `Target "${name}" uses step: map but omits the "over" input to fan out over`,
+        line,
+      );
+    }
+    if (!header.inputs.map(bareRef).includes(header.over)) {
+      throw new BuildDocParseError(
+        `Target "${name}" maps over "${header.over}", which must also be declared in inputs`,
+        line,
+      );
+    }
   }
 }
 

@@ -162,6 +162,8 @@ async function executeTarget(
       return executeModelStep(target, tp, ctx, outputs);
     case "transform":
       return executeTransform(target, tp, ctx, outputs);
+    case "map":
+      return executeMap(target, tp, ctx, outputs);
     default:
       throw new NotImplementedError(
         `step "${target.header.step}" is not implemented yet (target "${target.name}")`,
@@ -232,6 +234,94 @@ function assertJson(text: string, targetName: string): void {
       `eval target "${targetName}" declares a schema but its output is not valid JSON`,
     );
   }
+}
+
+/**
+ * Run a `map` step: resolve the `over` input to a list, then call the model once
+ * per item with `{{item}}` bound to that item. Results are collected into one
+ * JSON-array artifact; token usage and cost are summed across items.
+ */
+async function executeMap(
+  target: TargetBlock,
+  tp: TargetPlan,
+  ctx: BuildContext,
+  outputs: ReadonlyMap<string, string>,
+): Promise<void> {
+  if (!ctx.provider) {
+    throw new Error(`No provider configured; cannot execute map target "${target.name}"`);
+  }
+  const over = target.header.over;
+  if (!over) {
+    throw new Error(`Target "${target.name}" step=map requires an "over" input`);
+  }
+
+  const items = parseList(await readRefContent(over, ctx, outputs));
+  const results: string[] = [];
+  let input = 0;
+  let output = 0;
+  let costUsd = 0;
+
+  const start = Date.now();
+  for (const item of items) {
+    const bindings = new Map([["item", item]]);
+    const prompt = await renderTemplate(target.body, ctx, outputs, false, bindings);
+    const system = target.header.system
+      ? await renderTemplate(target.header.system, ctx, outputs, false, bindings)
+      : undefined;
+    const result = await ctx.provider.complete({
+      model: target.header.model ?? "",
+      system,
+      prompt,
+      params: target.header.params,
+    });
+    results.push(result.text);
+    input += result.usage.input;
+    output += result.usage.output;
+    costUsd += result.costUsd ?? 0;
+  }
+  const durationMs = Date.now() - start;
+
+  const content = new TextEncoder().encode(JSON.stringify(results, null, 2));
+  await ctx.cas.put(tp.id, content);
+  await writeOutput(ctx, target.header.output, content);
+
+  const provenance: Provenance = {
+    target: target.name,
+    id: tp.id,
+    output: target.header.output,
+    step: "map",
+    model: target.header.model,
+    params: target.header.params,
+    inputs: tp.inputs,
+    promptHash: sha256(target.body),
+    tokens: { input, output },
+    costUsd,
+    durationMs,
+    producedAt: timestamp(ctx),
+  };
+  await ctx.cas.putProvenance(provenance);
+}
+
+/**
+ * Parse a `map` source into items: a JSON array (each element stringified) when
+ * the content is one, else newline-delimited (blank lines dropped).
+ */
+function parseList(content: string): string[] {
+  const trimmed = content.trim();
+  if (trimmed.startsWith("[")) {
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.map((v) => (typeof v === "string" ? v : JSON.stringify(v)));
+      }
+    } catch {
+      // Not valid JSON — fall through to newline mode.
+    }
+  }
+  return trimmed
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
 }
 
 /**
@@ -356,12 +446,16 @@ async function renderTemplate(
   ctx: BuildContext,
   outputs: ReadonlyMap<string, string>,
   previewMissingTargets: boolean,
+  bindings?: ReadonlyMap<string, string>,
 ): Promise<string> {
   void refsInBody; // refs were validated at parse time; we substitute live matches here
   return replaceAsync(text, REF_RE, async (inner) => {
     const trimmed = inner.trim();
     const ref = bareRef(trimmed);
     const suffix = suffixOf(trimmed);
+    // In-memory bindings (e.g. a `map` step's {{item}}) take precedence over IO.
+    const bound = bindings?.get(ref);
+    if (bound !== undefined) return applySuffix(bound, suffix);
     try {
       const content = await readRefContent(ref, ctx, outputs);
       return applySuffix(content, suffix);
