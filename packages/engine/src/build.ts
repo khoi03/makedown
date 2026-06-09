@@ -158,6 +158,7 @@ async function executeTarget(
 ): Promise<void> {
   switch (target.header.step) {
     case "chat":
+    case "eval":
       return executeModelStep(target, tp, ctx, outputs);
     case "transform":
       return executeTransform(target, tp, ctx, outputs);
@@ -194,6 +195,13 @@ async function executeModelStep(
   });
   const durationMs = Date.now() - start;
 
+  // An `eval` target with a declared `schema` must return structured JSON.
+  // Full JSON-Schema conformance is a future refinement (SPEC §11); for now we
+  // enforce parseability so downstream targets can consume a real object.
+  if (target.header.step === "eval" && target.header.schema !== undefined) {
+    assertJson(result.text, target.name);
+  }
+
   const content = new TextEncoder().encode(result.text);
   await ctx.cas.put(tp.id, content);
   await writeOutput(ctx, target.header.output, content);
@@ -213,6 +221,17 @@ async function executeModelStep(
     producedAt: timestamp(ctx),
   };
   await ctx.cas.putProvenance(provenance);
+}
+
+/** Assert that text is valid JSON; throws a clear error otherwise. */
+function assertJson(text: string, targetName: string): void {
+  try {
+    JSON.parse(text);
+  } catch {
+    throw new Error(
+      `eval target "${targetName}" declares a schema but its output is not valid JSON`,
+    );
+  }
 }
 
 /**
