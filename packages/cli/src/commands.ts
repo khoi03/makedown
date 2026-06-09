@@ -1,48 +1,45 @@
 /** Implementations behind the `md` subcommands. */
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { planBuild, runBuild, renderTarget } from "@makedown/engine";
+import { planBuild, runBuild, renderTarget, estimateBuildCost } from "@makedown/engine";
+import { cachePolicyToString } from "@makedown/shared";
 import { loadDoc, makeContext, resolveDir, hasAnyProvider, BUILD_FILE } from "./workspace.js";
 import { loadEnv } from "./env.js";
+import { colorEnabled, makeStyler } from "./format.js";
+import { renderStatus, renderGraph, renderBuildResult, renderCost, renderWhy } from "./render.js";
+
+const styler = makeStyler(colorEnabled());
 
 export async function cmdStatus(dirArg?: string): Promise<void> {
   const dir = resolveDir(dirArg);
   loadEnv(dir);
   const doc = await loadDoc(dir);
   const plan = await planBuild(doc, makeContext(dir));
-  if (plan.targets.length === 0) {
-    console.log("No targets defined.");
-    return;
-  }
-  console.log("Target                         State    Depends on");
-  console.log("─".repeat(60));
-  for (const tp of plan.targets) {
-    const node = plan.graph.nodes.get(tp.name);
-    const deps = node?.deps.join(", ") || "—";
-    const state = tp.stale ? "stale" : "fresh";
-    console.log(`${tp.name.padEnd(30)} ${state.padEnd(8)} ${deps}`);
-  }
-  const stale = plan.targets.filter((t) => t.stale).length;
-  console.log(`\n${stale} stale / ${plan.targets.length} total`);
+  console.log(renderStatus(plan, styler));
 }
 
 export async function cmdBuild(dirArg?: string): Promise<void> {
   const dir = resolveDir(dirArg);
   loadEnv(dir);
-  if (!hasAnyProvider()) {
-    console.error("No model provider configured — required to run model steps.");
+  const doc = await loadDoc(dir);
+
+  // Only model steps need a provider; a transform-only build runs without one.
+  const plan = await planBuild(doc, makeContext(dir));
+  const byName = new Map(doc.targets.map((t) => [t.name, t] as const));
+  const needsProvider = plan.targets.some(
+    (tp) => tp.stale && byName.get(tp.name)?.header.step !== "transform",
+  );
+
+  if (needsProvider && !hasAnyProvider()) {
+    console.error(styler.red("No model provider configured — required to run model steps."));
     console.error("Create a .env in the workspace (see .env.example) with ANTHROPIC_API_KEY");
     console.error("and/or OPENAI_API_KEY, or use `md status` / `md graph` to inspect without building.");
     process.exitCode = 1;
     return;
   }
-  const doc = await loadDoc(dir);
-  const result = await runBuild(doc, makeContext(dir, true));
-  for (const name of result.plan.targets.map((t) => t.name)) {
-    const wasBuilt = result.built.includes(name);
-    console.log(`${wasBuilt ? "✓ built " : "• reused"}  ${name}`);
-  }
-  console.log(`\n${result.built.length} built, ${result.reused.length} reused`);
+
+  const result = await runBuild(doc, makeContext(dir, hasAnyProvider()));
+  console.log(renderBuildResult(result, styler));
 }
 
 export async function cmdGraph(dirArg?: string): Promise<void> {
@@ -50,12 +47,7 @@ export async function cmdGraph(dirArg?: string): Promise<void> {
   loadEnv(dir);
   const doc = await loadDoc(dir);
   const plan = await planBuild(doc, makeContext(dir));
-  console.log("Execution order (dependencies first):\n");
-  for (const name of plan.graph.order) {
-    const node = plan.graph.nodes.get(name);
-    const deps = node && node.deps.length ? `  ← ${node.deps.join(", ")}` : "";
-    console.log(`  ${name}${deps}`);
-  }
+  console.log(renderGraph(plan, styler));
 }
 
 export async function cmdWhy(name: string, dirArg?: string): Promise<void> {
@@ -66,26 +58,33 @@ export async function cmdWhy(name: string, dirArg?: string): Promise<void> {
   const plan = await planBuild(doc, ctx);
   const tp = plan.targets.find((t) => t.name === name);
   if (!tp) {
-    console.error(`Unknown target: ${name}`);
+    console.error(styler.red(`Unknown target: ${name}`));
     process.exitCode = 1;
     return;
   }
+  const target = doc.targets.find((t) => t.name === name)!;
   const provenance = await ctx.cas.getProvenance(tp.id);
-  console.log(`target:  ${name}`);
-  console.log(`id:      ${tp.id}`);
-  console.log(`state:   ${tp.stale ? "stale (not built)" : "fresh"}`);
-  console.log(`inputs:`);
-  for (const i of tp.inputs) {
-    console.log(`  - ${i.ref} [${i.kind}] ${i.hash}`);
-  }
-  if (provenance) {
-    console.log(`model:   ${provenance.model ?? "—"}`);
-    console.log(`tokens:  in ${provenance.tokens?.input ?? "?"} / out ${provenance.tokens?.output ?? "?"}`);
-    console.log(`cost:    ${provenance.costUsd !== undefined ? `$${provenance.costUsd}` : "—"}`);
-    console.log(`made at: ${provenance.producedAt}`);
-  } else {
-    console.log("(no provenance yet — run `md build`)");
-  }
+  const cache = target.header.cache;
+  const samples =
+    cache.kind === "stochastic"
+      ? { have: await ctx.cas.countSamples(tp.id), want: cache.n }
+      : undefined;
+
+  console.log(
+    renderWhy(
+      {
+        name,
+        id: tp.id,
+        stale: tp.stale,
+        step: target.header.step,
+        cache: cachePolicyToString(cache),
+        inputs: tp.inputs,
+        samples,
+        provenance,
+      },
+      styler,
+    ),
+  );
 }
 
 export async function cmdRender(name: string, dirArg?: string): Promise<void> {
@@ -95,25 +94,23 @@ export async function cmdRender(name: string, dirArg?: string): Promise<void> {
   const { system, prompt } = await renderTarget(doc, name, makeContext(dir));
 
   if (system !== undefined) {
-    console.log("─── system ───");
+    console.log(styler.dim("─── system ───"));
     console.log(system);
     console.log("");
   }
-  console.log("─── prompt (user) ───");
+  console.log(styler.dim("─── prompt (user) ───"));
   console.log(prompt);
 
   const total = (system?.length ?? 0) + prompt.length;
-  console.log(`\n(${total} characters across system + prompt; no tokens spent)`);
+  console.log(styler.dim(`\n(${total} characters across system + prompt; no tokens spent)`));
 }
 
 export async function cmdCost(dirArg?: string): Promise<void> {
   const dir = resolveDir(dirArg);
   loadEnv(dir);
   const doc = await loadDoc(dir);
-  const plan = await planBuild(doc, makeContext(dir));
-  const stale = plan.targets.filter((t) => t.stale);
-  console.log(`${stale.length} target(s) would run: ${stale.map((t) => t.name).join(", ") || "—"}`);
-  console.log("Token/$ estimation is not implemented yet (Phase 1).");
+  const cost = await estimateBuildCost(doc, makeContext(dir));
+  console.log(renderCost(cost, styler));
 }
 
 export async function cmdInit(dirArg?: string): Promise<void> {
@@ -126,8 +123,8 @@ export async function cmdInit(dirArg?: string): Promise<void> {
     "utf8",
   );
   await writeFile(join(dir, BUILD_FILE), SAMPLE_BUILD_MD, "utf8");
-  console.log(`Initialized Makedown workspace in ${dir}`);
-  console.log("Next: `md status`  (set ANTHROPIC_API_KEY, then `md build`)");
+  console.log(styler.green(`Initialized Makedown workspace in ${dir}`));
+  console.log(styler.dim("Next: `md status`  (set ANTHROPIC_API_KEY, then `md build`)"));
 }
 
 const SAMPLE_BUILD_MD = `---
