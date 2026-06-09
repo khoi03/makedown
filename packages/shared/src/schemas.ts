@@ -61,7 +61,11 @@ export function parseCachePolicy(raw: string | undefined): CachePolicy {
   }
   const match = STOCHASTIC_RE.exec(raw.trim());
   if (match) {
-    return { kind: "stochastic", n: Number(match[1] ?? "0") };
+    const n = Number(match[1] ?? "0");
+    if (n < 1) {
+      throw new Error(`Invalid cache policy: stochastic(n=${n}) — n must be >= 1`);
+    }
+    return { kind: "stochastic", n };
   }
   throw new Error(
     `Invalid cache policy: "${raw}" (expected "deterministic", "always", or "stochastic(n=<k>)")`,

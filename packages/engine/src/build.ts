@@ -71,11 +71,23 @@ export async function planBuild(doc: BuildDoc, ctx: BuildContext): Promise<Build
     });
     ids.set(name, id);
 
-    const stale = target.header.cache.kind === "always" ? true : !(await ctx.cas.has(id));
+    const stale = await isStale(target, id, ctx);
     plans.push({ name, id, stale, inputs });
   }
 
   return { graph, targets: plans, ids };
+}
+
+/**
+ * Whether a target must (re)compute. `always` is never cached; `stochastic(n=k)`
+ * is stale until k samples exist; `deterministic` is stale until its artifact is
+ * in the CAS.
+ */
+async function isStale(target: TargetBlock, id: string, ctx: BuildContext): Promise<boolean> {
+  const cache = target.header.cache;
+  if (cache.kind === "always") return true;
+  if (cache.kind === "stochastic") return (await ctx.cas.countSamples(id)) < cache.n;
+  return !(await ctx.cas.has(id));
 }
 
 async function resolveInputs(
@@ -159,7 +171,9 @@ async function executeTarget(
   switch (target.header.step) {
     case "chat":
     case "eval":
-      return executeModelStep(target, tp, ctx, outputs);
+      return target.header.cache.kind === "stochastic"
+        ? executeStochasticModelStep(target, tp, ctx, outputs)
+        : executeModelStep(target, tp, ctx, outputs);
     case "transform":
       return executeTransform(target, tp, ctx, outputs);
     case "map":
@@ -223,6 +237,84 @@ async function executeModelStep(
     producedAt: timestamp(ctx),
   };
   await ctx.cas.putProvenance(provenance);
+}
+
+/**
+ * Run a `stochastic(n=k)` model step. Generates samples up to k (topping up only
+ * the missing ones after an interrupted build), persisting each as a sibling
+ * under the identity hash. The blessed sample (default index 0) is materialized
+ * as the canonical artifact and output, so downstream targets consume it.
+ */
+async function executeStochasticModelStep(
+  target: TargetBlock,
+  tp: TargetPlan,
+  ctx: BuildContext,
+  outputs: ReadonlyMap<string, string>,
+): Promise<void> {
+  if (!ctx.provider) {
+    throw new Error(
+      `No provider configured; cannot execute ${target.header.step} target "${target.name}"`,
+    );
+  }
+  const cache = target.header.cache;
+  const k = cache.kind === "stochastic" ? cache.n : 1;
+  const existing = await ctx.cas.countSamples(tp.id);
+
+  const prompt = await renderTemplate(target.body, ctx, outputs, false);
+  const system = target.header.system
+    ? await renderTemplate(target.header.system, ctx, outputs, false)
+    : undefined;
+
+  for (let index = existing; index < k; index++) {
+    const start = Date.now();
+    const result = await ctx.provider.complete({
+      model: target.header.model ?? "",
+      system,
+      prompt,
+      params: target.header.params,
+    });
+    const durationMs = Date.now() - start;
+    const provenance: Provenance = {
+      target: target.name,
+      id: tp.id,
+      output: target.header.output,
+      step: target.header.step,
+      model: target.header.model,
+      params: target.header.params,
+      inputs: tp.inputs,
+      promptHash: sha256(prompt),
+      tokens: result.usage,
+      costUsd: result.costUsd,
+      durationMs,
+      producedAt: timestamp(ctx),
+    };
+    await ctx.cas.putSample({
+      id: tp.id,
+      index,
+      content: new TextEncoder().encode(result.text),
+      provenance,
+    });
+  }
+
+  await materializeBlessed(target, tp, ctx);
+}
+
+/** Promote the blessed sample to the canonical artifact + output path. */
+async function materializeBlessed(
+  target: TargetBlock,
+  tp: TargetPlan,
+  ctx: BuildContext,
+): Promise<void> {
+  const blessed = await ctx.cas.getBlessed(tp.id);
+  const content =
+    (await ctx.cas.getSample(tp.id, blessed)) ?? (await ctx.cas.getSample(tp.id, 0));
+  if (!content) return;
+  await ctx.cas.put(tp.id, content);
+  await writeOutput(ctx, target.header.output, content);
+  const provenance =
+    (await ctx.cas.getSampleProvenance(tp.id, blessed)) ??
+    (await ctx.cas.getSampleProvenance(tp.id, 0));
+  if (provenance) await ctx.cas.putProvenance(provenance);
 }
 
 /** Assert that text is valid JSON; throws a clear error otherwise. */

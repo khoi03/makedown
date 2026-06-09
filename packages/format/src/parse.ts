@@ -207,6 +207,12 @@ function assertStepRequirements(name: string, header: RecipeHeader, line: number
       );
     }
   }
+  if (header.cache.kind === "stochastic" && header.step !== "chat" && header.step !== "eval") {
+    throw new BuildDocParseError(
+      `Target "${name}" uses cache: stochastic, which is only valid for step: chat or eval`,
+      line,
+    );
+  }
 }
 
 /** Strip an optional `:fn(args)` transform suffix to get the bare ref. SPEC §5. */
