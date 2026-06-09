@@ -1,0 +1,13 @@
+{
+  "name": "@makedown/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "[COMMERCIAL] Cloud API: auth, billing, hosting, team RBAC, shared artifact CDN. Not Apache-2.0.",
+  "scripts": {
+    "build": "echo \"@makedown/server: commercial package — not yet implemented\"",
+    "typecheck": "echo \"noop\"",
+    "test": "echo \"noop\""
+  }
+}
