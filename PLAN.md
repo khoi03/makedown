@@ -323,7 +323,7 @@ The open-core decision splits the monorepo by license. Keep this boundary clean 
 
 ### Remaining
 1. **`agent` step** (deferred this pass) — coding agent (Claude Agent SDK) in an isolated worktree/container + approval gate. Largest remaining Phase 1 item; needs the SDK, git worktree lifecycle, and an enforced sandbox.
-2. Smoke-test the model steps against a live API (the `.env` → router → adapter chain is verified incl. a dead-port failure test; transform/eval/map executors are unit-tested with a fake provider — only a paid/authenticated `chat`/`eval`/`map` call is unrun).
+2. ✅ **Live smoke-test (2026-06-10)** — ran `examples/phase1` end-to-end against a live API (`cc/claude-sonnet-4-6`) from a clean copy: all 4 targets built live (`map` ×3, `stochastic(n=3)` chat → 3/3 samples, `eval` returned valid `{score,rationale}` JSON, `why` showed full provenance); no-op rebuild reused all 4 (0 calls); reverting a source to identical bytes returned all to `fresh` (content hash, not mtime); editing only the transform script staled just `topic-list`+`blurbs`. The real-money `.env → router → adapter → model → CAS` path is verified.
 3. Sandbox enforcement (worktree/container) so untrusted `build.md` can run safely; optional `map` fan-out cap.
 4. **Commercial layer**: Yjs collaborative editor (`packages/web`) + git-backed sync (`packages/sync`) + `apps/server`.
 
