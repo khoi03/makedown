@@ -42,6 +42,16 @@ The `cache` policy is per target: `deterministic` (cached by identity hash),
 `stochastic(n=k)` (store k samples, surface variance, consume a "blessed" one), or
 `always` (never cached).
 
+[`examples/phase1`](./examples/phase1) is a ready-made tour of all of the above.
+Without a key, `md build` still runs the provider-free `transform` targets and
+defers the model steps:
+
+```
+md status examples/phase1
+md cost   examples/phase1      # token/$ upper bound, no model calls
+md build  examples/phase1      # builds the transform; reports what needs a key
+```
+
 > **Security — `transform` runs code.** A `transform` script is workspace-authored
 > code that the engine imports and executes in-process, exactly like a `make`
 > recipe. Only build a `build.md` you trust. The `sandbox` field is advisory today;
@@ -93,7 +103,7 @@ shows provenance; a no-op rebuild costs zero tokens). Phase 1 adds the `transfor
 `eval`, and `map` step types, the `stochastic(n=k)` cache policy, real `md cost`
 token/$ estimation, and a polished CLI. Remaining: the `agent` step (coding agent
 in a worktree + approval gate) and the commercial collaboration layer. Engine =
-TypeScript. 104 tests; engine ~96% / CLI ~80% statement coverage.
+TypeScript. 105 tests; engine ~96% / CLI ~80% statement coverage.
 
 ## Develop
 
