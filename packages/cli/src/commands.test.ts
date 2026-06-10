@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cmdInit, cmdStatus, cmdGraph, cmdCost, cmdRender, cmdWhy, cmdBuild } from "./commands.js";
@@ -81,10 +81,51 @@ describe("cmd* handlers", () => {
     expect(process.exitCode).toBe(1);
   });
 
-  it("build refuses model steps when no provider is configured", async () => {
-    await cmdInit(dir);
+  it("defers model steps when no provider is configured", async () => {
+    await cmdInit(dir); // scaffold is a single chat target
     await cmdBuild(dir);
-    expect(errors.join("\n")).toContain("No model provider configured");
+    expect(errors.join("\n")).toMatch(/Deferred .* model provider/);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("builds provider-free transform targets and defers the model ones", async () => {
+    await mkdir(join(dir, "sources"), { recursive: true });
+    await mkdir(join(dir, "transforms"), { recursive: true });
+    await writeFile(join(dir, "sources", "in.md"), "hello", "utf8");
+    await writeFile(
+      join(dir, "transforms", "up.mjs"),
+      `export default (i) => i["sources/in.md"].toUpperCase();`,
+      "utf8",
+    );
+    await writeFile(
+      join(dir, "build.md"),
+      `## target: shout
+\`\`\`yaml
+inputs: [sources/in.md]
+step: transform
+transform: transforms/up.mjs
+output: artifacts/shout.md
+\`\`\`
+
+## target: summary
+\`\`\`yaml
+inputs: [sources/in.md]
+step: chat
+model: claude-opus-4-8
+output: artifacts/summary.md
+\`\`\`
+Summarize {{sources/in.md}}.
+`,
+      "utf8",
+    );
+
+    await cmdBuild(dir);
+
+    // The transform built with no key...
+    expect(await readFile(join(dir, "artifacts", "shout.md"), "utf8")).toBe("HELLO");
+    expect(logs.join("\n")).toContain("shout");
+    // ...and the model target was deferred.
+    expect(errors.join("\n")).toContain("summary");
     expect(process.exitCode).toBe(1);
   });
 });

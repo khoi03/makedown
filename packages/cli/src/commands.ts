@@ -1,8 +1,8 @@
 /** Implementations behind the `md` subcommands. */
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { planBuild, runBuild, renderTarget, estimateBuildCost } from "@makedown/engine";
-import { cachePolicyToString } from "@makedown/shared";
+import { planBuild, runBuild, renderTarget, estimateBuildCost, type BuildPlan } from "@makedown/engine";
+import { cachePolicyToString, type BuildDoc } from "@makedown/shared";
 import { loadDoc, makeContext, resolveDir, hasAnyProvider, BUILD_FILE } from "./workspace.js";
 import { loadEnv } from "./env.js";
 import { colorEnabled, makeStyler } from "./format.js";
@@ -23,23 +23,58 @@ export async function cmdBuild(dirArg?: string): Promise<void> {
   loadEnv(dir);
   const doc = await loadDoc(dir);
 
-  // Only model steps need a provider; a transform-only build runs without one.
-  const plan = await planBuild(doc, makeContext(dir));
-  const byName = new Map(doc.targets.map((t) => [t.name, t] as const));
-  const needsProvider = plan.targets.some(
-    (tp) => tp.stale && byName.get(tp.name)?.header.step !== "transform",
-  );
-
-  if (needsProvider && !hasAnyProvider()) {
-    console.error(styler.red("No model provider configured — required to run model steps."));
-    console.error("Create a .env in the workspace (see .env.example) with ANTHROPIC_API_KEY");
-    console.error("and/or OPENAI_API_KEY, or use `md status` / `md graph` to inspect without building.");
-    process.exitCode = 1;
+  // With a provider, build everything.
+  if (hasAnyProvider()) {
+    const result = await runBuild(doc, makeContext(dir, true));
+    console.log(renderBuildResult(result, styler));
     return;
   }
 
-  const result = await runBuild(doc, makeContext(dir, hasAnyProvider()));
-  console.log(renderBuildResult(result, styler));
+  // Without one, still build the targets that don't need a model (transforms
+  // whose dependencies are also provider-free), and defer the model steps.
+  const plan = await planBuild(doc, makeContext(dir));
+  const free = providerFreeTargets(doc, plan);
+  const buildable: BuildDoc = { ...doc, targets: doc.targets.filter((t) => free.has(t.name)) };
+
+  if (buildable.targets.length > 0) {
+    const result = await runBuild(buildable, makeContext(dir));
+    console.log(renderBuildResult(result, styler));
+  }
+
+  const deferred = plan.targets.filter((tp) => tp.stale && !free.has(tp.name));
+  if (deferred.length > 0) {
+    console.error("");
+    console.error(
+      styler.yellow(
+        `Deferred ${deferred.length} target(s) needing a model provider: ${deferred
+          .map((tp) => tp.name)
+          .join(", ")}`,
+      ),
+    );
+    console.error(
+      styler.dim(
+        "Set ANTHROPIC_API_KEY / OPENAI_API_KEY in the workspace .env (see .env.example), then build again.",
+      ),
+    );
+    process.exitCode = 1;
+  }
+}
+
+/**
+ * Names of targets buildable without a model provider: `transform` steps whose
+ * dependencies are themselves all provider-free. Computed in execution order so
+ * a transform that consumes another transform's artifact still qualifies.
+ */
+function providerFreeTargets(doc: BuildDoc, plan: BuildPlan): Set<string> {
+  const byName = new Map(doc.targets.map((t) => [t.name, t] as const));
+  const free = new Set<string>();
+  for (const name of plan.graph.order) {
+    const deps = plan.graph.nodes.get(name)?.deps ?? [];
+    if (byName.get(name)?.header.step === "transform" && deps.every((d) => free.has(d))) {
+      free.add(name);
+    }
+  }
+  return free;
 }
 
 export async function cmdGraph(dirArg?: string): Promise<void> {
