@@ -34,6 +34,13 @@ export class NotImplementedError extends Error {
 }
 
 /**
+ * Default ceiling on how many items a single `map` step may fan out over. A
+ * runaway or untrusted list would otherwise spawn unbounded provider calls
+ * (cost + rate-limit DoS). Override per build via {@link BuildContext.maxMapFanout}.
+ */
+export const DEFAULT_MAP_FANOUT_CAP = 1000;
+
+/**
  * The human-in-the-loop decision for an `approval: required` artifact (typically
  * an `agent` step). The engine calls `ctx.approve` with this and only accepts the
  * artifact — writing it to disk + CAS so downstream targets consume it — if the
@@ -64,6 +71,12 @@ export interface BuildContext {
    * agent output.
    */
   readonly approve?: (request: ApprovalRequest) => Promise<boolean>;
+  /**
+   * Maximum number of items a single `map` step may fan out over.
+   * Defaults to {@link DEFAULT_MAP_FANOUT_CAP}. Exceeding it fails the build
+   * before any provider call is made.
+   */
+  readonly maxMapFanout?: number;
   /** Clock injection for deterministic tests. Defaults to Date. */
   readonly now?: () => Date;
 }
@@ -406,6 +419,17 @@ async function executeMap(
   }
 
   const items = parseList(await readRefContent(over, ctx.workspaceDir, outputs));
+
+  // Cap the fan-out before any provider call so a runaway/untrusted list can't
+  // spawn unbounded inference (cost + rate-limit DoS). Fail fast and loud.
+  const cap = ctx.maxMapFanout ?? DEFAULT_MAP_FANOUT_CAP;
+  if (items.length > cap) {
+    throw new Error(
+      `map target "${target.name}" fans out over ${items.length} items, exceeding the cap of ${cap}. ` +
+        `Reduce the "over" list or raise maxMapFanout if this is intentional.`,
+    );
+  }
+
   const results: string[] = [];
   let input = 0;
   let output = 0;

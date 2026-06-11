@@ -6,6 +6,7 @@ export {
   runBuild,
   renderTarget,
   NotImplementedError,
+  DEFAULT_MAP_FANOUT_CAP,
   type BuildContext,
   type ApprovalRequest,
   type BuildPlan,

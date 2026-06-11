@@ -56,6 +56,7 @@ export const FIXED_NOW = (): Date => new Date("2026-06-09T00:00:00.000Z");
 export interface CtxOptions {
   readonly agentRunner?: AgentRunner;
   readonly approve?: (req: ApprovalRequest) => Promise<boolean>;
+  readonly maxMapFanout?: number;
 }
 
 export interface Workspace {
@@ -77,6 +78,7 @@ export async function makeWorkspace(): Promise<Workspace> {
         provider,
         agentRunner: opts?.agentRunner,
         approve: opts?.approve,
+        maxMapFanout: opts?.maxMapFanout,
         now: FIXED_NOW,
       };
     },
