@@ -95,7 +95,7 @@ cache: deterministic
 | `output` | string | no | `<artifacts_dir>/<name>.md` | Path the compiled artifact is written to. |
 | `cache` | enum | no | `deterministic` | `deterministic` \| `stochastic(n=<k>)` \| `always` (see §7) |
 | `agent` | string | for `step: agent` | — | Coding-agent runtime id, e.g. `claude-code`. |
-| `sandbox` | enum | no | `worktree` | `worktree` \| `container` \| `none` — isolation for `agent`/`transform`. |
+| `sandbox` | enum | no | `worktree` | `worktree` \| `container` \| `none` — isolation level for `agent`/`transform` (see §6). For `transform`: `worktree` = locked-down subprocess, `container` = Docker (also network-isolated), `none` = trusted in-process. |
 | `approval` | enum | no | `none` | `none` \| `required` — gate before the artifact is accepted downstream. |
 | `transform` | string | for `step: transform` | — | Path to a deterministic script (zero tokens). |
 | `over` | string | for `step: map` | — | An input (target/source) that resolves to a list; the recipe fans out over its items. |
@@ -159,20 +159,36 @@ fully-rendered system + user prompt for any target with `md render <target>`
 `agent` artifacts default to `cache: always` and should usually set
 `approval: required` (non-deterministic, side-effectful).
 
-> **Security model.** `transform` and `agent` both execute code. A `transform`
-> script is imported as an ES module and run **in-process**, exactly like a `make`
-> recipe runs shell — so a `build.md` is trusted input; only build one you control.
-> An `agent` step runs in the sandbox named by its `sandbox` field: `worktree`
-> provisions a **real, isolated `git worktree`** (a throwaway checkout off `HEAD`,
-> torn down after the run) so the agent edits a copy, not your working tree;
-> `none` runs in the workspace itself (advisory — trusted `build.md` only);
-> `container` is reserved (not implemented yet). Side-effectful agent output is
-> gated: with `approval: required`, the artifact is accepted only on explicit human
-> approval, and is otherwise discarded (never written to disk or the CAS, and
-> downstream targets that depend on it are skipped). `transform`'s in-process
-> execution and source/output/script path resolution remain trusted; making an
-> untrusted workspace safe end-to-end (locked-down `transform` execution, a
-> path-traversal guard, the `container` sandbox) is the planned Phase 1.5 hardening.
+> **Security model.** `transform` and `agent` both execute code. The engine is
+> hardened to run an untrusted `build.md` safely (Phase 1.5):
+>
+> - **Path confinement.** Every declared path — inputs, `output`, `transform`
+>   scripts, and `over` lists — is resolved inside the workspace root. Absolute
+>   paths, `..` escapes, and symlinks that point outside the workspace are
+>   rejected before any read or write.
+> - **`transform` isolation** is selected by the target's `sandbox` field:
+>   - `worktree` (the default) runs the script in a **locked-down subprocess**
+>     under Node's permission model: **no ambient filesystem** (it sees only the
+>     resolved input *values* it is handed), **no inherited environment** (the
+>     parent's API keys are scrubbed), a **memory cap**, and a **wall-clock cap**.
+>     Note the permission model does not gate **network**.
+>   - `container` runs the script in **Docker** — everything `worktree` gives,
+>     plus **`--network none`** (the only level that also closes the network) and
+>     hard CPU/PID caps, with only the script mounted read-only. Docker is an
+>     optional dependency, touched only on this path.
+>   - `none` imports the script **in-process**, exactly like a `make` recipe runs
+>     shell — the trusted escape hatch for transforms you author (full filesystem,
+>     environment, and network). Only use it for a `build.md` you control.
+> - **`agent` isolation** uses the same `sandbox` field: `worktree` provisions a
+>   **real, isolated `git worktree`** (a throwaway checkout off `HEAD`, torn down
+>   after the run) so the agent edits a copy, not your working tree; `none` runs
+>   in the workspace itself (advisory — trusted `build.md` only). Side-effectful
+>   agent output is gated: with `approval: required`, the artifact is accepted only
+>   on explicit human approval, and is otherwise discarded (never written to disk
+>   or the CAS, and downstream targets that depend on it are skipped).
+> - **`map` fan-out** is capped (default 1000 items) so a runaway or untrusted
+>   list cannot spawn unbounded inference.
+>
 > The agent's API credentials are read from the environment by the agent runtime —
 > they are never embedded in `build.md`.
 

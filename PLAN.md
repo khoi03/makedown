@@ -337,9 +337,16 @@ The open-core decision splits the monorepo by license. Keep this boundary clean 
 > above is the faithful TDD re-implementation. Lesson: keep git repos out of OneDrive
 > and push to a remote early.
 
+### Done (Phase 1.5 — untrusted-workspace hardening · 2026-06-11, TDD)
+- ✅ **Path-traversal guard** (`engine/src/paths.ts`). Every declared path — inputs, `output`, `transform` scripts, `over` lists — is confined to the workspace root: absolute paths (POSIX **or** Windows form), `..` escapes, NUL bytes, and escaping symlinks are rejected (`realpath` check on the deepest existing ancestor) before any read/write. Wired into `build.ts` + `template.ts` at the IO boundary.
+- ✅ **Locked-down `transform` execution.** The `sandbox` field now selects transform isolation: `worktree` (new default) runs the script in a **forked Node child under `--permission`** — no ambient filesystem, **scrubbed env** (the parent's API keys are not inherited), `--max-old-space-size` memory cap, and a wall-clock cap that SIGKILLs an overrun; inputs go over stdin, the result returns over a dedicated fd 3 (immune to the script's stdout). `none` = trusted in-process (escape hatch). The permission model doesn't gate network — that's what `container` is for.
+- ✅ **`container` sandbox (Option A).** `sandbox: container` runs the transform in **Docker**: `--network none` (closes the network gap), only the script mounted read-only, `--memory`/`--cpus`/`--pids-limit`/`--read-only` caps, force-removed on timeout. Docker is an **optional** dependency, touched only on this path; `isDockerAvailable()` probes daemon + local image (no network pull), and missing-CLI/daemon-down/missing-image all give actionable errors. Verified live against `node:lts-alpine` (incl. the real network block). Agent-in-container deferred (needs a containerized agent runner — documented).
+- ✅ **`map` fan-out cap** (`DEFAULT_MAP_FANOUT_CAP = 1000`, overridable via `BuildContext.maxMapFanout`). An over-cap list fails fast — zero provider calls — naming the target, count, and cap.
+- ✅ **Reviewed (code-review + verification-loop + security-scan).** Two real issues caught and fixed: the subprocess inherited the parent env (API-key exposure) → env scrubbed; a comma in a sandboxed script path made the `--allow-fs-read` allow-list ambiguous → rejected. No CRITICAL/HIGH outstanding. **195 tests** (engine 72 → 120), engine ~95% statement coverage. All `spawn`/`execFile` use argv arrays (no shell).
+
 ### Remaining
-1. **Phase 1.5 — hardening** (run untrusted `build.md` safely): the `container` sandbox case; run `transform` in a locked-down worker/subprocess (no ambient fs/net, time+memory caps) + a path-traversal guard on input/output/script paths; a `map` fan-out cap. Independent items — do any subset.
-2. **Phase 2 — commercial layer**: Yjs collaborative editor (`packages/web`) + git-backed sync (`packages/sync`) + `apps/server`.
+1. **Phase 2 — commercial layer**: Yjs collaborative editor (`packages/web`) + git-backed sync (`packages/sync`) + `apps/server`.
+2. **Later hardening (optional):** agent-in-container (a containerized agent runner); a `transform` script that needs allow-listed `node_modules` under the subprocess sandbox; an example workspace demoing `sandbox: container`.
 
 ---
 

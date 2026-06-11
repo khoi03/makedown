@@ -57,14 +57,17 @@ in a throwaway `git worktree`, you review its diff at an approval prompt, and th
 accepted **unified diff** is written as the artifact (`git apply` it). It needs a
 git repo, a key, and `npm install @anthropic-ai/claude-agent-sdk`.
 
-> **Security — `transform`/`agent` run code.** A `transform` script is
-> workspace-authored code the engine imports and executes in-process, like a `make`
-> recipe — only build a `build.md` you trust. An `agent` step runs in its `sandbox`:
-> `worktree` (default) isolates it in a throwaway checkout; `none` runs in your
-> workspace (advisory); `container` is reserved. `approval: required` gates the
-> artifact — denied output is never written and downstream targets are skipped.
-> Locked-down `transform` execution, a path-traversal guard, and the `container`
-> sandbox are the planned Phase 1.5 hardening.
+> **Security — `transform`/`agent` run code.** Every declared path (inputs,
+> outputs, scripts) is confined to the workspace — `..`, absolute paths, and
+> escaping symlinks are rejected. A `transform`'s isolation is set by its
+> `sandbox` field: `worktree` (default) runs it in a **locked-down subprocess**
+> (no ambient filesystem, no inherited secrets, memory + time caps);
+> `container` runs it in **Docker** (also `--network none`, the strongest level);
+> `none` imports it in-process like a `make` recipe (trusted escape hatch).
+> An `agent` step runs in its `sandbox` (`worktree` default; `none` advisory),
+> and `approval: required` gates the artifact — denied output is never written and
+> downstream targets are skipped. `map` fan-out is capped to bound runaway
+> inference. *(Phase 1.5 hardening — implemented.)*
 
 ## Why this exists
 
@@ -112,9 +115,11 @@ provenance; a no-op rebuild costs zero tokens). Phase 1 adds the `transform`,
 `eval`, `map`, and `agent` step types, the `stochastic(n=k)` cache policy, real
 `md cost` token/$ estimation, and a polished CLI. The `agent` step runs a coding
 agent in an isolated `git worktree` behind an approval gate, capturing its diff.
-Remaining: Phase 1.5 hardening (untrusted-workspace safety) and the commercial
-collaboration layer. Engine = TypeScript. 147 tests; engine ~96% / CLI ~80%
-statement coverage.
+**Phase 1.5 (untrusted-workspace safety) is done:** every path is confined to the
+workspace, `transform` scripts run in a locked-down subprocess (or Docker via
+`sandbox: container`) with no ambient filesystem/secrets/network and memory+time
+caps, and `map` fan-out is capped. Remaining: the commercial collaboration layer
+(Phase 2). Engine = TypeScript. 195 tests; engine ~95% statement coverage.
 
 ## Develop
 
