@@ -4,8 +4,8 @@
  * orchestrator and the cost estimator can share them without a circular import.
  */
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { bareRef } from "@makedown/format";
+import { realResolveInWorkspace } from "./paths.js";
 
 const REF_RE = /\{\{\s*([^}]+?)\s*\}\}/g;
 const HEAD_TAIL_RE = /^(head|tail)\((\d+)\)$/;
@@ -47,7 +47,9 @@ export async function readRefContent(
   outputs: ReadonlyMap<string, string>,
 ): Promise<string> {
   const path = outputs.get(ref) ?? ref;
-  const bytes = await readFile(join(workspaceDir, path));
+  // Confine every interpolated/over read to the workspace (throws on escape).
+  const abs = await realResolveInWorkspace(workspaceDir, path);
+  const bytes = await readFile(abs);
   return new TextDecoder().decode(bytes);
 }
 

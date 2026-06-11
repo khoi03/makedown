@@ -15,6 +15,11 @@ export {
 } from "./build.js";
 export { provisionSandbox, type SandboxHandle } from "./sandbox.js";
 export {
+  resolveInWorkspace,
+  realResolveInWorkspace,
+  PathEscapeError,
+} from "./paths.js";
+export {
   estimateBuildCost,
   estimateTokens,
   type TargetCost,

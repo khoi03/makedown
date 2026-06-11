@@ -13,7 +13,7 @@
  * cost estimation in cost.ts.
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { bareRef } from "@makedown/format";
 import type { Provider } from "@makedown/providers";
@@ -23,6 +23,7 @@ import { computeIdentityHash, sha256 } from "./hash.js";
 import type { Cas } from "./cas.js";
 import { buildGraph, type BuildGraph } from "./graph.js";
 import { provisionSandbox } from "./sandbox.js";
+import { realResolveInWorkspace, PathEscapeError } from "./paths.js";
 import { renderTemplate, readRefContent, parseList } from "./template.js";
 
 export class NotImplementedError extends Error {
@@ -133,7 +134,8 @@ async function resolveInputs(
       // Dependency target: its identity hash *is* the input hash.
       resolved.push({ ref, kind: "target", hash: depId });
     } else {
-      const bytes = await readFile(join(ctx.workspaceDir, ref));
+      const abs = await realResolveInWorkspace(ctx.workspaceDir, ref);
+      const bytes = await readFile(abs);
       resolved.push({ ref, kind: "source", hash: sha256(new Uint8Array(bytes)) });
     }
   }
@@ -152,9 +154,12 @@ async function auxHashesFor(
 ): Promise<readonly string[] | undefined> {
   if (target.header.step === "transform" && target.header.transform) {
     try {
-      const bytes = await readFile(join(ctx.workspaceDir, target.header.transform));
+      const abs = await realResolveInWorkspace(ctx.workspaceDir, target.header.transform);
+      const bytes = await readFile(abs);
       return [sha256(new Uint8Array(bytes))];
-    } catch {
+    } catch (err) {
+      // A path that escapes the workspace is a hard error, not a missing script.
+      if (err instanceof PathEscapeError) throw err;
       return ["sha256:missing-transform-script"];
     }
   }
@@ -586,7 +591,8 @@ async function loadTransform(target: TargetBlock, ctx: BuildContext): Promise<Lo
   if (!rel) {
     throw new Error(`Target "${target.name}" step=transform requires a "transform" script path`);
   }
-  const absPath = join(ctx.workspaceDir, rel);
+  // Confine the script path to the workspace before any IO (throws on escape).
+  const absPath = await realResolveInWorkspace(ctx.workspaceDir, rel);
   let bytes: Uint8Array;
   try {
     bytes = new Uint8Array(await readFile(absPath));
@@ -639,7 +645,8 @@ async function materialize(tp: TargetPlan, target: TargetBlock, ctx: BuildContex
 }
 
 async function writeOutput(ctx: BuildContext, output: string, content: Uint8Array): Promise<void> {
-  const path = join(ctx.workspaceDir, output);
+  // Confine the output path to the workspace (throws on escape / symlinked parent).
+  const path = await realResolveInWorkspace(ctx.workspaceDir, output);
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, content);
 }
