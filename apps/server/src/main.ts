@@ -73,7 +73,15 @@ export function createServer(opts: ServerOptions): AssembledServer {
   const registry = new RoomRegistry({
     createDoc: (id) => liveDoc(id),
     onDispose: (id) => {
-      void persistences.get(id)?.flush();
+      // Last client left: flush, then release the doc + persistence so a
+      // long-running server doesn't accumulate observers for every workspace
+      // ever opened. A later reopen recreates and reloads them.
+      const persistence = persistences.get(id);
+      if (persistence) {
+        void persistence.flush().finally(() => persistence.destroy());
+      }
+      persistences.delete(id);
+      docs.delete(id);
     },
   });
 

@@ -44,7 +44,16 @@ export function attachWebSocketServer(
       return;
     }
 
-    const room = registry.get(workspaceId);
+    // Resolving the room can throw (e.g. the registry rejects an unsafe
+    // workspace id). A bad URL must close the socket, never crash the process.
+    let room;
+    try {
+      room = registry.get(workspaceId);
+    } catch {
+      socket.close(1008, "invalid workspace id");
+      return;
+    }
+
     const conn: SyncConnection = {
       send: (data: Uint8Array): void => {
         if (socket.readyState === socket.OPEN) socket.send(data);

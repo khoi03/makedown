@@ -71,6 +71,25 @@ describe("attachWebSocketServer (real sockets)", () => {
     expect(clientDoc.getText("build.md").toString()).toBe("over the wire");
   });
 
+  it("closes (not crashes) when the registry rejects the workspace id", async () => {
+    const registry = new RoomRegistry({
+      createDoc: (id) => {
+        if (id === "bad") throw new Error("invalid workspace id");
+        return new Y.Doc();
+      },
+    });
+    const port = await start(registry);
+
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/sync/bad`);
+    clients.push(socket);
+    const code = await new Promise<number>((resolve, reject) => {
+      socket.on("close", (c) => resolve(c));
+      socket.on("error", reject);
+      setTimeout(() => reject(new Error("timeout")), 3000);
+    });
+    expect(code).toBe(1008);
+  });
+
   it("rejects a connection with no workspace id", async () => {
     const registry = new RoomRegistry();
     const port = await start(registry);
