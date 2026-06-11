@@ -23,8 +23,17 @@ importers:
 
   apps/server: {}
 
+  packages/agents:
+    dependencies:
+      '@makedown/shared':
+        specifier: workspace:*
+        version: link:../shared
+
   packages/cli:
     dependencies:
+      '@makedown/agents':
+        specifier: workspace:*
+        version: link:../agents
       '@makedown/engine':
         specifier: workspace:*
         version: link:../engine
@@ -43,6 +52,9 @@ importers:
 
   packages/engine:
     dependencies:
+      '@makedown/agents':
+        specifier: workspace:*
+        version: link:../agents
       '@makedown/format':
         specifier: workspace:*
         version: link:../format
