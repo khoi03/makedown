@@ -11,7 +11,7 @@
 
 ## ▶ Resuming in a new session
 
-1. Start the session **inside this directory** (`C:\Users\khoiv\OneDrive\Documents\Code\Makedown`). This project has its own auto-memory, so the Makedown notes load automatically.
+1. Start the session **inside this directory** (`C:\Users\khoiv\Documents\Code\makedown` — moved out of OneDrive, now git-backed with a GitHub remote). This project has its own auto-memory, so the Makedown notes load automatically.
 2. Kick off with: **"Continue Makedown — read `PLAN.md` (§14 = current state) and `SPEC.md`, confirm where we are, then wait."**
 3. Expect the assistant to **verify before acting**: `pnpm install && pnpm -r build && pnpm -r test` should be green, then `node packages/cli/dist/index.js status examples/quickstart`.
 
