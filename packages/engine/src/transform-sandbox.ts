@@ -97,6 +97,15 @@ export async function runSandboxedTransform(
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TRANSFORM_TIMEOUT_MS;
   const memoryMb = opts.memoryMb ?? DEFAULT_TRANSFORM_MEMORY_MB;
 
+  // Node's --allow-fs-read uses comma as a path-list separator, so a comma in
+  // the script path would make the allow-list ambiguous. Refuse it outright
+  // (defense in depth — the path is already workspace-confined upstream).
+  if (opts.scriptPath.includes(",")) {
+    throw new Error(
+      `Transform script path may not contain a comma when sandboxed: ${opts.scriptPath}`,
+    );
+  }
+
   const runnerDir = await mkdtemp(join(tmpdir(), "makedown-xf-"));
   const runnerPath = join(runnerDir, "runner.mjs");
   await writeFile(runnerPath, CHILD_RUNNER, "utf8");

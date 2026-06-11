@@ -110,6 +110,12 @@ describe("runSandboxedTransform", () => {
     }
   });
 
+  it("refuses a sandboxed script path containing a comma (allow-list ambiguity)", async () => {
+    const weird = join(dir, "a,b.mjs");
+    await writeFile(weird, `export default () => "x";`, "utf8");
+    await expect(runSandboxedTransform({ scriptPath: weird, inputs: {} })).rejects.toThrow(/comma/i);
+  });
+
   it("exposes sensible default limits", () => {
     expect(DEFAULT_TRANSFORM_TIMEOUT_MS).toBeGreaterThan(0);
     expect(DEFAULT_TRANSFORM_MEMORY_MB).toBeGreaterThan(0);
