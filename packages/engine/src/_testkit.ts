@@ -8,7 +8,7 @@ import { join } from "node:path";
 import type { CompletionRequest, CompletionResult, Provider } from "@makedown/providers";
 import type { AgentRunner, AgentRunRequest, AgentRunResult } from "@makedown/agents";
 import { LocalCas } from "./cas.js";
-import type { BuildContext, ApprovalRequest } from "./build.js";
+import type { BuildContext, ApprovalRequest, BuildEvent } from "./build.js";
 
 /** A deterministic in-memory provider that records every request it receives. */
 export class FakeProvider implements Provider {
@@ -60,6 +60,7 @@ export interface CtxOptions {
   readonly transformTimeoutMs?: number;
   readonly transformMemoryMb?: number;
   readonly transformContainerImage?: string;
+  readonly onProgress?: (event: BuildEvent) => void;
 }
 
 export interface Workspace {
@@ -85,6 +86,7 @@ export async function makeWorkspace(): Promise<Workspace> {
         transformTimeoutMs: opts?.transformTimeoutMs,
         transformMemoryMb: opts?.transformMemoryMb,
         transformContainerImage: opts?.transformContainerImage,
+        onProgress: opts?.onProgress,
         now: FIXED_NOW,
       };
     },

@@ -1,0 +1,28 @@
+.editor {
+  height: 100%;
+  overflow: hidden;
+}
+
+.editor .cm-editor {
+  height: 100%;
+}
+
+/* Remote collaborator carets + selections (y-codemirror.next). */
+.editor .cm-ySelectionCaret {
+  position: relative;
+  border-left: 2px solid;
+  margin-left: -1px;
+}
+.editor .cm-ySelectionInfo {
+  position: absolute;
+  top: -1.4em;
+  left: -2px;
+  font-size: 0.66rem;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 4px 4px 4px 0;
+  color: var(--on-accent);
+  white-space: nowrap;
+  opacity: 0.9;
+}

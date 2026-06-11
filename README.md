@@ -101,10 +101,10 @@ makedown/
 │   ├── providers/          # [OSS] model adapters (Anthropic first) + cost accounting
 │   ├── agents/             # [OSS] coding-agent runner (Claude Agent SDK) for the agent step
 │   ├── cli/                # [OSS] the `md` command
-│   ├── sync/               # [commercial] CRDT sync server + git backing (placeholder)
-│   └── web/                # [commercial] collaborative editor (placeholder)
+│   ├── sync/               # [commercial] Yjs CRDT doc model + git backing + WebSocket sync server
+│   └── web/                # [commercial] React collaborative workbench (editor + DAG + inspector)
 └── apps/
-    └── server/             # [commercial] auth, billing, hosting (placeholder)
+    └── server/             # [commercial] Fastify API: build orchestration, SSE, snapshots/branches
 ```
 
 ## Status
@@ -118,8 +118,17 @@ agent in an isolated `git worktree` behind an approval gate, capturing its diff.
 **Phase 1.5 (untrusted-workspace safety) is done:** every path is confined to the
 workspace, `transform` scripts run in a locked-down subprocess (or Docker via
 `sandbox: container`) with no ambient filesystem/secrets/network and memory+time
-caps, and `map` fan-out is capped. Remaining: the commercial collaboration layer
-(Phase 2). Engine = TypeScript. 195 tests; engine ~95% statement coverage.
+caps, and `map` fan-out is capped.
+
+**Phase 2 collab core (2.0–2.3) is done** — the commercial collaboration layer:
+real-time co-editing (Yjs CRDT) of `build.md` + sources, a git-backed snapshot/
+branch model, a Fastify server that drives the engine with streaming build
+progress (SSE) and a human approval gate, and a React **build workbench**
+(collaborative editor + live DAG + artifact/provenance/cost inspector). Remaining:
+Phase 2.4 (auth, RBAC, billing, shared artifact CDN). Engine = TypeScript.
+**319 tests** (314 package + 5 script); engine ~95% / sync ~95% / server ~91%
+statement coverage. The dependency-direction guard (`pnpm lint:deps`) keeps the
+OSS packages free of any commercial import.
 
 ## Develop
 
@@ -128,7 +137,48 @@ pnpm install
 pnpm build         # build all packages
 pnpm typecheck
 pnpm test
+pnpm lint:deps     # verify the open-core boundary (OSS never imports commercial)
 ```
+
+## Run the collaborative app (Phase 2)
+
+The workbench is two processes: the **server** (Fastify API + sync WebSocket) and
+the **web** dev server (Vite, which proxies `/api` + `/sync` to the server).
+
+```bash
+# 0) build the workspace packages the server imports
+pnpm build
+
+# 1) point the server at a directory whose subfolders are workspaces
+#    (each workspace is a git repo with a build.md). Use the bundled examples:
+#    examples/quickstart, examples/phase1, ... each already has a build.md.
+#    A workspace must be a git repo for snapshots/branches:
+git -C examples/quickstart init -q -b main   # once per example, if not already
+
+# 2) start the server (PowerShell shown; bash: MAKEDOWN_WORKSPACES_ROOT=... node ...)
+$env:MAKEDOWN_WORKSPACES_ROOT = "$pwd/examples"   # the workspaces root
+$env:PORT = "4000"
+# optional: model credentials so chat/agent builds actually run
+$env:ANTHROPIC_API_KEY = "sk-..."                 # omit for transform-only builds
+node apps/server/dist/main.js
+# → Makedown server listening on http://127.0.0.1:4000 (workspaces: .../examples)
+
+# 3) in a second terminal, start the web app (proxies to the server above)
+pnpm --filter @makedown/web dev
+# → open the printed URL (http://localhost:5173). Pick a workspace, or deep-link
+#   to one directly: http://localhost:5173/#/quickstart
+```
+
+In the workbench: edit `build.md` on the left (open the same URL in two tabs to
+see live co-editing + presence cursors); the **DAG** updates as you type; click
+**Build** to run — stale targets recompute and stream status onto the graph;
+click a node to inspect its **artifact / provenance / cost**; **Snapshot** commits
+the current state to git; the branch chip switches/creates branches. An `agent`
+target with `approval: required` pops an approval modal showing its diff.
+
+> **Security:** the server has no auth yet (Phase 2.4). Run it locally or on a
+> trusted network only — build endpoints execute workspace code (sandboxed per
+> Phase 1.5). Don't expose it publicly until 2.4 adds auth + RBAC.
 
 ## License
 

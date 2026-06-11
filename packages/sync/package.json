@@ -5,9 +5,35 @@
   "type": "module",
   "license": "UNLICENSED",
   "description": "[COMMERCIAL] Real-time collaboration (Yjs CRDT) + git-backed workspace sync. Not Apache-2.0.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "build": "echo \"@makedown/sync: commercial package — not yet implemented\"",
-    "typecheck": "echo \"noop\"",
-    "test": "echo \"noop\""
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit",
+    "clean": "tsc -b --clean",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@makedown/format": "workspace:*",
+    "@makedown/shared": "workspace:*",
+    "lib0": "^0.2.97",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.20"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "ws": "^8.18.0"
+  },
+  "peerDependencies": {
+    "ws": "^8.18.0"
   }
 }

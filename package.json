@@ -12,7 +12,9 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "test:scripts": "vitest run scripts",
     "lint": "pnpm -r lint",
+    "lint:deps": "node scripts/check-deps.mjs",
     "clean": "pnpm -r clean",
     "md": "pnpm --filter @makedown/cli exec md"
   },

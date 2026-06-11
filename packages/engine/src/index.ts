@@ -9,6 +9,7 @@ export {
   DEFAULT_MAP_FANOUT_CAP,
   type BuildContext,
   type ApprovalRequest,
+  type BuildEvent,
   type BuildPlan,
   type TargetPlan,
   type BuildResult,
