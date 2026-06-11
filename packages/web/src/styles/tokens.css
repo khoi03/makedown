@@ -1,0 +1,6 @@
+/* Design tokens — filled out with the real visual direction in Phase 2.3. */
+:root {
+  --color-surface: oklch(98% 0.005 250);
+  --color-text: oklch(20% 0.02 260);
+  --color-accent: oklch(62% 0.19 264);
+}
