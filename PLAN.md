@@ -321,11 +321,25 @@ The open-core decision splits the monorepo by license. Keep this boundary clean 
 - ✅ **Aesthetic CLI** — dependency-free ANSI styler (NO_COLOR/FORCE_COLOR/TTY aware) + pure string renderers (separated from IO for testability). `md why` now shows step, cache policy, stochastic sample counts, short input hashes, duration. `md build` builds provider-free `transform` targets even with no key and clearly defers the model steps. `examples/phase1` is a ready-made tour of all Phase 1 features.
 - ✅ **Refactor** — extracted `template.ts` (interpolation/list parsing) and `cost.ts` from `build.ts` (775→529 lines). **105 tests**; engine ~96% / CLI ~80% statement coverage. Reviewed (code-review + verification-loop + source security pass): no CRITICAL/HIGH; transform code-execution trust model documented.
 
+- ✅ **Live smoke-test (2026-06-10)** — ran `examples/phase1` end-to-end against a live API (`cc/claude-sonnet-4-6`) from a clean copy: all 4 targets built live (`map` ×3, `stochastic(n=3)` chat → 3/3 samples, `eval` returned valid `{score,rationale}` JSON, `why` showed full provenance); no-op rebuild reused all 4 (0 calls); reverting a source to identical bytes returned all to `fresh` (content hash, not mtime); editing only the transform script staled just `topic-list`+`blurbs`. The real-money `.env → router → adapter → model → CAS` path is verified.
+
+### Done (Phase 1 — `agent` step · Phase 1 now feature-complete · TDD)
+- ✅ **`agent` step.** A general-purpose coding agent runs as a build step, in an **isolated git worktree** by default, behind a **human-in-the-loop approval gate**. Mirrors the proven `Provider` injection: the engine depends only on an injected **`AgentRunner` interface** (new OSS package `packages/agents`, Apache-2.0); the real **`ClaudeCodeAgentRunner`** wraps `@anthropic-ai/claude-agent-sdk`, dynamic-imported by name so it's an optional workspace-installed dep — absent ⇒ actionable install hint, not a stack trace.
+- ✅ **Sandbox** (`engine/src/sandbox.ts`): `worktree` = detached `git worktree add HEAD` (real throwaway checkout, torn down after; cleanup never throws); `none` = run in workspace (advisory, trusted `build.md`); `container` = `NotImplementedError` (Phase 1.5). `SandboxHandle.diff()` captures the agent's changes (`git add -A && git diff --cached`, 64 MB cap).
+- ✅ **Approval gate**: `approval: required` artifacts are accepted only on explicit approval via the injected `ctx.approve`; **no approver ⇒ deny** (safe default). Denied output is never written to disk/CAS, and downstream targets that depend on it are skipped (surfaced as `rejected` in `BuildResult`). CLI wires an interactive TTY approver (non-TTY ⇒ deny).
+- ✅ **Artifact = the agent's actual work (the worktree diff)**, falling back to the agent's text when there's no diff. Parser: `step: agent` requires an `agent:` id; agent targets default `cache: always`. `examples/agent` outputs `implement.diff` (`git apply` it). Provenance records `step: agent`, runner tokens/cost, `producedBy`.
+- ✅ **Tests**: **147 tests** (agents 4, format 10, providers 18, engine 72, cli 43). Reviewed (code-review + verification-loop + security-scan): no CRITICAL/HIGH; the agent path runs `execFile` with argv arrays (no shell), tears the sandbox down in `finally`, and defaults approval to deny.
+
+> **Note (2026-06-11): repository moved out of OneDrive.** OneDrive sync corrupted
+> the prior local `.git` and rewound the working tree, losing the original
+> `agent`-step commits (no remote → unrecoverable). The repo now lives at
+> `C:\Users\khoiv\Documents\Code\makedown` with a GitHub remote; the `agent` step
+> above is the faithful TDD re-implementation. Lesson: keep git repos out of OneDrive
+> and push to a remote early.
+
 ### Remaining
-1. **`agent` step** (deferred this pass) — coding agent (Claude Agent SDK) in an isolated worktree/container + approval gate. Largest remaining Phase 1 item; needs the SDK, git worktree lifecycle, and an enforced sandbox.
-2. ✅ **Live smoke-test (2026-06-10)** — ran `examples/phase1` end-to-end against a live API (`cc/claude-sonnet-4-6`) from a clean copy: all 4 targets built live (`map` ×3, `stochastic(n=3)` chat → 3/3 samples, `eval` returned valid `{score,rationale}` JSON, `why` showed full provenance); no-op rebuild reused all 4 (0 calls); reverting a source to identical bytes returned all to `fresh` (content hash, not mtime); editing only the transform script staled just `topic-list`+`blurbs`. The real-money `.env → router → adapter → model → CAS` path is verified.
-3. Sandbox enforcement (worktree/container) so untrusted `build.md` can run safely; optional `map` fan-out cap.
-4. **Commercial layer**: Yjs collaborative editor (`packages/web`) + git-backed sync (`packages/sync`) + `apps/server`.
+1. **Phase 1.5 — hardening** (run untrusted `build.md` safely): the `container` sandbox case; run `transform` in a locked-down worker/subprocess (no ambient fs/net, time+memory caps) + a path-traversal guard on input/output/script paths; a `map` fan-out cap. Independent items — do any subset.
+2. **Phase 2 — commercial layer**: Yjs collaborative editor (`packages/web`) + git-backed sync (`packages/sync`) + `apps/server`.
 
 ---
 

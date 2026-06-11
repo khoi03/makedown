@@ -36,15 +36,15 @@ A target's `step` decides how it computes (see [`SPEC.md`](./SPEC.md) §6):
 | `eval` | Score/grade an input; with a `schema`, the output must be valid JSON. | yes |
 | `map` | Fan a prompt out `over` a list (`{{item}}` per element), collected into one JSON array. | per item |
 | `transform` | Run a deterministic workspace script — *"code where code is enough."* | **zero** |
-| `agent` | Coding agent in a sandbox (not implemented yet — Phase 1). | yes |
+| `agent` | Coding agent (`agent:`) in an isolated `sandbox`, behind an approval gate. | yes |
 
 The `cache` policy is per target: `deterministic` (cached by identity hash),
 `stochastic(n=k)` (store k samples, surface variance, consume a "blessed" one), or
-`always` (never cached).
+`always` (never cached; the default for `agent`).
 
-[`examples/phase1`](./examples/phase1) is a ready-made tour of all of the above.
-Without a key, `md build` still runs the provider-free `transform` targets and
-defers the model steps:
+[`examples/phase1`](./examples/phase1) is a ready-made tour of `chat`/`map`/
+`transform`/`eval` + `stochastic`. Without a key, `md build` still runs the
+provider-free `transform` targets and defers the model steps:
 
 ```
 md status examples/phase1
@@ -52,11 +52,19 @@ md cost   examples/phase1      # token/$ upper bound, no model calls
 md build  examples/phase1      # builds the transform; reports what needs a key
 ```
 
-> **Security — `transform` runs code.** A `transform` script is workspace-authored
-> code that the engine imports and executes in-process, exactly like a `make`
-> recipe. Only build a `build.md` you trust. The `sandbox` field is advisory today;
-> true worktree/container isolation (and running untrusted workspaces) is future
-> work.
+[`examples/agent`](./examples/agent) demos the `agent` step: a coding agent runs
+in a throwaway `git worktree`, you review its diff at an approval prompt, and the
+accepted **unified diff** is written as the artifact (`git apply` it). It needs a
+git repo, a key, and `npm install @anthropic-ai/claude-agent-sdk`.
+
+> **Security — `transform`/`agent` run code.** A `transform` script is
+> workspace-authored code the engine imports and executes in-process, like a `make`
+> recipe — only build a `build.md` you trust. An `agent` step runs in its `sandbox`:
+> `worktree` (default) isolates it in a throwaway checkout; `none` runs in your
+> workspace (advisory); `container` is reserved. `approval: required` gates the
+> artifact — denied output is never written and downstream targets are skipped.
+> Locked-down `transform` execution, a path-traversal guard, and the `container`
+> sandbox are the planned Phase 1.5 hardening.
 
 ## Why this exists
 
@@ -86,8 +94,9 @@ makedown/
 ├── packages/
 │   ├── shared/             # [OSS] domain types + zod schemas
 │   ├── format/             # [OSS] build.md parser / serializer
-│   ├── engine/             # [OSS] ★ DAG, content-addressed store, hashing, provenance
+│   ├── engine/             # [OSS] ★ DAG, content-addressed store, hashing, provenance, sandbox
 │   ├── providers/          # [OSS] model adapters (Anthropic first) + cost accounting
+│   ├── agents/             # [OSS] coding-agent runner (Claude Agent SDK) for the agent step
 │   ├── cli/                # [OSS] the `md` command
 │   ├── sync/               # [commercial] CRDT sync server + git backing (placeholder)
 │   └── web/                # [commercial] collaborative editor (placeholder)
@@ -97,13 +106,15 @@ makedown/
 
 ## Status
 
-**Phase 0 (engine spike) + most of Phase 1 are done.** The headless incremental
-engine is proven (edit one source → only affected targets recompute; `md why`
-shows provenance; a no-op rebuild costs zero tokens). Phase 1 adds the `transform`,
-`eval`, and `map` step types, the `stochastic(n=k)` cache policy, real `md cost`
-token/$ estimation, and a polished CLI. Remaining: the `agent` step (coding agent
-in a worktree + approval gate) and the commercial collaboration layer. Engine =
-TypeScript. 105 tests; engine ~96% / CLI ~80% statement coverage.
+**Phase 0 (engine spike) + Phase 1 are done.** The headless incremental engine is
+proven (edit one source → only affected targets recompute; `md why` shows
+provenance; a no-op rebuild costs zero tokens). Phase 1 adds the `transform`,
+`eval`, `map`, and `agent` step types, the `stochastic(n=k)` cache policy, real
+`md cost` token/$ estimation, and a polished CLI. The `agent` step runs a coding
+agent in an isolated `git worktree` behind an approval gate, capturing its diff.
+Remaining: Phase 1.5 hardening (untrusted-workspace safety) and the commercial
+collaboration layer. Engine = TypeScript. 147 tests; engine ~96% / CLI ~80%
+statement coverage.
 
 ## Develop
 

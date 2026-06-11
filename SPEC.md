@@ -159,13 +159,22 @@ fully-rendered system + user prompt for any target with `md render <target>`
 `agent` artifacts default to `cache: always` and should usually set
 `approval: required` (non-deterministic, side-effectful).
 
-> **Security model.** `transform` (and, later, `agent`) execute code: the engine
-> imports a `transform` script as an ES module and runs it **in-process**, exactly
-> like a `make` recipe runs shell. A `build.md` is therefore trusted input — only
-> build one you control. The `sandbox` field (`worktree`/`container`/`none`) is
-> **advisory** in the current OSS engine; enforced isolation, and the ability to
-> run untrusted workspaces safely, are future work. Source/output/script paths are
-> resolved relative to the workspace and are likewise trusted.
+> **Security model.** `transform` and `agent` both execute code. A `transform`
+> script is imported as an ES module and run **in-process**, exactly like a `make`
+> recipe runs shell — so a `build.md` is trusted input; only build one you control.
+> An `agent` step runs in the sandbox named by its `sandbox` field: `worktree`
+> provisions a **real, isolated `git worktree`** (a throwaway checkout off `HEAD`,
+> torn down after the run) so the agent edits a copy, not your working tree;
+> `none` runs in the workspace itself (advisory — trusted `build.md` only);
+> `container` is reserved (not implemented yet). Side-effectful agent output is
+> gated: with `approval: required`, the artifact is accepted only on explicit human
+> approval, and is otherwise discarded (never written to disk or the CAS, and
+> downstream targets that depend on it are skipped). `transform`'s in-process
+> execution and source/output/script path resolution remain trusted; making an
+> untrusted workspace safe end-to-end (locked-down `transform` execution, a
+> path-traversal guard, the `container` sandbox) is the planned Phase 1.5 hardening.
+> The agent's API credentials are read from the environment by the agent runtime —
+> they are never embedded in `build.md`.
 
 ---
 
