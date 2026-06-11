@@ -38,6 +38,8 @@ export interface AssembledServer {
   readonly app: FastifyInstance;
   readonly registry: RoomRegistry;
   readonly manager: BuildManager;
+  /** Cancel all debounce timers + detach observers (clean shutdown). */
+  dispose(): void;
 }
 
 /**
@@ -107,7 +109,13 @@ export function createServer(opts: ServerOptions): AssembledServer {
     },
   });
 
-  return { app, registry, manager };
+  const dispose = (): void => {
+    for (const persistence of persistences.values()) persistence.destroy();
+    persistences.clear();
+    docs.clear();
+  };
+
+  return { app, registry, manager, dispose };
 }
 
 export interface RunningServer extends AssembledServer {
@@ -117,7 +125,7 @@ export interface RunningServer extends AssembledServer {
 
 /** Assemble, listen, and mount the sync WebSocket. */
 export async function start(opts: ServerOptions): Promise<RunningServer> {
-  const { app, registry, manager } = createServer(opts);
+  const { app, registry, manager, dispose } = createServer(opts);
   await app.listen({ port: opts.port ?? 4000, host: opts.host ?? "127.0.0.1" });
 
   const wss = new WebSocketServer({ server: app.server, path: undefined });
@@ -131,8 +139,12 @@ export async function start(opts: ServerOptions): Promise<RunningServer> {
     app,
     registry,
     manager,
+    dispose,
     url,
     close: async () => {
+      // Cancel all debounce timers FIRST so no flush fires after teardown
+      // (otherwise a pending materialize/state-write races shutdown + cleanup).
+      dispose();
       await new Promise<void>((resolve) => wss.close(() => resolve()));
       await app.close();
     },
