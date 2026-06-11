@@ -22,7 +22,6 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@fastify/websocket": "^11.0.1",
     "@makedown/agents": "workspace:*",
     "@makedown/engine": "workspace:*",
     "@makedown/format": "workspace:*",
@@ -30,6 +29,11 @@
     "@makedown/shared": "workspace:*",
     "@makedown/sync": "workspace:*",
     "fastify": "^5.1.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "yjs": "^13.6.20"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "y-protocols": "^1.0.6"
   }
 }
