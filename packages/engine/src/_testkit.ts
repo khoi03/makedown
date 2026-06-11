@@ -59,6 +59,7 @@ export interface CtxOptions {
   readonly maxMapFanout?: number;
   readonly transformTimeoutMs?: number;
   readonly transformMemoryMb?: number;
+  readonly transformContainerImage?: string;
 }
 
 export interface Workspace {
@@ -83,6 +84,7 @@ export async function makeWorkspace(): Promise<Workspace> {
         maxMapFanout: opts?.maxMapFanout,
         transformTimeoutMs: opts?.transformTimeoutMs,
         transformMemoryMb: opts?.transformMemoryMb,
+        transformContainerImage: opts?.transformContainerImage,
         now: FIXED_NOW,
       };
     },

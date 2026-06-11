@@ -25,6 +25,7 @@ import { buildGraph, type BuildGraph } from "./graph.js";
 import { provisionSandbox } from "./sandbox.js";
 import { realResolveInWorkspace, PathEscapeError } from "./paths.js";
 import { runSandboxedTransform } from "./transform-sandbox.js";
+import { runContainerTransform } from "./transform-container.js";
 import { renderTemplate, readRefContent, parseList } from "./template.js";
 
 export class NotImplementedError extends Error {
@@ -82,6 +83,8 @@ export interface BuildContext {
   readonly transformTimeoutMs?: number;
   /** Heap cap (MB) for a single sandboxed `transform` run. */
   readonly transformMemoryMb?: number;
+  /** Image for `sandbox: container` transforms. Defaults to a small Node image. */
+  readonly transformContainerImage?: string;
   /** Clock injection for deterministic tests. Defaults to Date. */
   readonly now?: () => Date;
 }
@@ -647,9 +650,13 @@ async function runTransform(
     case "none":
       return runTransformInProcess(absPath, hash, target.header.transform ?? "", inputs);
     case "container":
-      throw new NotImplementedError(
-        `sandbox: container for transform is not implemented yet (target "${target.name}")`,
-      );
+      return runContainerTransform({
+        scriptPath: absPath,
+        inputs,
+        timeoutMs: ctx.transformTimeoutMs,
+        memoryMb: ctx.transformMemoryMb,
+        image: ctx.transformContainerImage,
+      });
     case "worktree":
       return runSandboxedTransform({
         scriptPath: absPath,

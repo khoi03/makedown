@@ -22,6 +22,12 @@ export {
   type SandboxedTransformOptions,
 } from "./transform-sandbox.js";
 export {
+  runContainerTransform,
+  isDockerAvailable,
+  DEFAULT_TRANSFORM_CONTAINER_IMAGE,
+  type ContainerTransformOptions,
+} from "./transform-container.js";
+export {
   resolveInWorkspace,
   realResolveInWorkspace,
   PathEscapeError,

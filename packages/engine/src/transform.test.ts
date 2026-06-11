@@ -4,7 +4,10 @@ import { join } from "node:path";
 import { parseBuildDoc } from "@makedown/format";
 import { LocalCas } from "./cas.js";
 import { planBuild, runBuild } from "./build.js";
+import { isDockerAvailable, DEFAULT_TRANSFORM_CONTAINER_IMAGE } from "./transform-container.js";
 import { FakeProvider, makeWorkspace, type Workspace } from "./_testkit.js";
+
+const dockerReady = await isDockerAvailable(DEFAULT_TRANSFORM_CONTAINER_IMAGE);
 
 let ws: Workspace;
 
@@ -168,6 +171,29 @@ output: artifacts/trusted.md
     const out = await readFile(join(ws.dir, "artifacts", "trusted.md"), "utf8");
     expect(out).toBe("INPROC:hello world");
   });
+
+  it.skipIf(!dockerReady)(
+    "sandbox: container runs the transform end-to-end through the build",
+    async () => {
+      await ws.write("transforms/upper.mjs", UPPER_TRANSFORM);
+      const doc = parseBuildDoc(
+        `## target: shout
+\`\`\`yaml
+inputs: [sources/notes.md]
+step: transform
+sandbox: container
+transform: transforms/upper.mjs
+output: artifacts/shout.md
+\`\`\`
+`,
+      );
+      const result = await runBuild(doc, ws.ctx());
+      expect(result.built).toEqual(["shout"]);
+      const out = await readFile(join(ws.dir, "artifacts", "shout.md"), "utf8");
+      expect(out).toBe("HELLO WORLD");
+    },
+    60_000,
+  );
 
   it("rejects step=transform that omits the transform field at parse time", () => {
     expect(() =>
