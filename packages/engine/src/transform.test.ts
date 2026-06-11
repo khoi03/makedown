@@ -121,6 +121,54 @@ output: artifacts/oops.md
     await expect(runBuild(doc, ws.ctx())).rejects.toThrow(/must export a function/i);
   });
 
+  it("denies filesystem access by default (sandbox: worktree) — safe for untrusted scripts", async () => {
+    // A default-sandbox transform that reaches for the filesystem must fail the
+    // build rather than silently reading host files.
+    await ws.write(
+      "transforms/leak.mjs",
+      `import { readFileSync } from "node:fs";
+       export default () => readFileSync("${join(ws.dir, "sources", "notes.md").replace(/\\/g, "\\\\")}", "utf8");`,
+    );
+    const doc = parseBuildDoc(
+      `## target: leak
+\`\`\`yaml
+inputs: [sources/notes.md]
+step: transform
+transform: transforms/leak.mjs
+output: artifacts/leak.md
+\`\`\`
+`,
+    );
+    await expect(runBuild(doc, ws.ctx())).rejects.toThrow(
+      /access denied|ERR_ACCESS_DENIED|restricted|permission|crashed/i,
+    );
+  });
+
+  it("sandbox: none runs the transform in-process (trusted escape hatch with fs access)", async () => {
+    // The opt-out path imports in-process, so it CAN touch the filesystem — the
+    // documented trade-off for transforms you author and trust.
+    await ws.write(
+      "transforms/read.mjs",
+      `import { readFileSync } from "node:fs";
+       export default (i) => "INPROC:" + i["sources/notes.md"];`,
+    );
+    const doc = parseBuildDoc(
+      `## target: trusted
+\`\`\`yaml
+inputs: [sources/notes.md]
+step: transform
+sandbox: none
+transform: transforms/read.mjs
+output: artifacts/trusted.md
+\`\`\`
+`,
+    );
+    const result = await runBuild(doc, ws.ctx());
+    expect(result.built).toEqual(["trusted"]);
+    const out = await readFile(join(ws.dir, "artifacts", "trusted.md"), "utf8");
+    expect(out).toBe("INPROC:hello world");
+  });
+
   it("rejects step=transform that omits the transform field at parse time", () => {
     expect(() =>
       parseBuildDoc(

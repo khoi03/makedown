@@ -24,6 +24,7 @@ import type { Cas } from "./cas.js";
 import { buildGraph, type BuildGraph } from "./graph.js";
 import { provisionSandbox } from "./sandbox.js";
 import { realResolveInWorkspace, PathEscapeError } from "./paths.js";
+import { runSandboxedTransform } from "./transform-sandbox.js";
 import { renderTemplate, readRefContent, parseList } from "./template.js";
 
 export class NotImplementedError extends Error {
@@ -77,6 +78,10 @@ export interface BuildContext {
    * before any provider call is made.
    */
   readonly maxMapFanout?: number;
+  /** Wall-clock cap (ms) for a single sandboxed `transform` run. */
+  readonly transformTimeoutMs?: number;
+  /** Heap cap (MB) for a single sandboxed `transform` run. */
+  readonly transformMemoryMb?: number;
   /** Clock injection for deterministic tests. Defaults to Date. */
   readonly now?: () => Date;
 }
@@ -567,9 +572,15 @@ async function executeAgentStep(
 /**
  * Run a deterministic workspace script (`transform`) at zero token cost — the
  * "code where code is enough" step. The script is a workspace-authored ES module
- * (trusted like a Makefile recipe) that exports a function over the resolved
- * input contents. Its content is part of the target's identity hash, so editing
- * the script rebuilds the artifact.
+ * that exports a function over the resolved input contents. Its content is part
+ * of the target's identity hash, so editing the script rebuilds the artifact.
+ *
+ * Isolation is selected by the target's `sandbox` field:
+ *   - `none` — imported and run **in-process** (trusted, like a Makefile recipe).
+ *   - `worktree` (default) — run in a locked-down subprocess (no ambient
+ *     filesystem, memory + time caps) via {@link runSandboxedTransform}.
+ *   - `container` — run in Docker (also network-isolated) via
+ *     {@link runContainerTransform}.
  */
 async function executeTransform(
   target: TargetBlock,
@@ -577,11 +588,11 @@ async function executeTransform(
   ctx: BuildContext,
   outputs: ReadonlyMap<string, string>,
 ): Promise<void> {
-  const script = await loadTransform(target, ctx);
+  const { absPath, hash } = await resolveTransformScript(target, ctx);
   const inputs = await resolveInputContents(target, ctx, outputs);
 
   const start = Date.now();
-  const produced = await script.fn(inputs);
+  const produced = await runTransform(target, absPath, hash, inputs, ctx);
   const durationMs = Date.now() - start;
 
   const content = toBytes(produced, target.name);
@@ -596,7 +607,7 @@ async function executeTransform(
     model: target.header.model,
     params: target.header.params,
     inputs: tp.inputs,
-    promptHash: script.hash,
+    promptHash: hash,
     costUsd: 0,
     durationMs,
     producedAt: timestamp(ctx),
@@ -604,13 +615,11 @@ async function executeTransform(
   await ctx.cas.putProvenance(provenance);
 }
 
-interface LoadedTransform {
-  readonly fn: (inputs: Record<string, string>) => unknown;
-  readonly hash: string;
-}
-
-/** Import a transform script, returning its exported function and content hash. */
-async function loadTransform(target: TargetBlock, ctx: BuildContext): Promise<LoadedTransform> {
+/** Confine + read a transform script, returning its absolute path and content hash. */
+async function resolveTransformScript(
+  target: TargetBlock,
+  ctx: BuildContext,
+): Promise<{ absPath: string; hash: string }> {
   const rel = target.header.transform;
   if (!rel) {
     throw new Error(`Target "${target.name}" step=transform requires a "transform" script path`);
@@ -623,7 +632,41 @@ async function loadTransform(target: TargetBlock, ctx: BuildContext): Promise<Lo
   } catch {
     throw new Error(`Transform script not found: ${rel} (target "${target.name}")`);
   }
-  const hash = sha256(bytes);
+  return { absPath, hash: sha256(bytes) };
+}
+
+/** Dispatch transform execution to the isolation level named by `sandbox`. */
+async function runTransform(
+  target: TargetBlock,
+  absPath: string,
+  hash: string,
+  inputs: Record<string, string>,
+  ctx: BuildContext,
+): Promise<unknown> {
+  switch (target.header.sandbox) {
+    case "none":
+      return runTransformInProcess(absPath, hash, target.header.transform ?? "", inputs);
+    case "container":
+      throw new NotImplementedError(
+        `sandbox: container for transform is not implemented yet (target "${target.name}")`,
+      );
+    case "worktree":
+      return runSandboxedTransform({
+        scriptPath: absPath,
+        inputs,
+        timeoutMs: ctx.transformTimeoutMs,
+        memoryMb: ctx.transformMemoryMb,
+      });
+  }
+}
+
+/** Trusted fast path: import the script in-process and call its exported function. */
+async function runTransformInProcess(
+  absPath: string,
+  hash: string,
+  rel: string,
+  inputs: Record<string, string>,
+): Promise<unknown> {
   // Cache-bust the ESM import by content hash so an edited script re-imports.
   const url = `${pathToFileURL(absPath).href}?v=${hash.slice("sha256:".length)}`;
   const mod = (await import(url)) as Record<string, unknown>;
@@ -633,7 +676,7 @@ async function loadTransform(target: TargetBlock, ctx: BuildContext): Promise<Lo
       `Transform "${rel}" must export a function (default export or named "transform")`,
     );
   }
-  return { fn: fn as LoadedTransform["fn"], hash };
+  return (fn as (i: Record<string, string>) => unknown)(inputs);
 }
 
 /** Resolve every declared input to its string content (for transform scripts). */

@@ -57,6 +57,8 @@ export interface CtxOptions {
   readonly agentRunner?: AgentRunner;
   readonly approve?: (req: ApprovalRequest) => Promise<boolean>;
   readonly maxMapFanout?: number;
+  readonly transformTimeoutMs?: number;
+  readonly transformMemoryMb?: number;
 }
 
 export interface Workspace {
@@ -79,6 +81,8 @@ export async function makeWorkspace(): Promise<Workspace> {
         agentRunner: opts?.agentRunner,
         approve: opts?.approve,
         maxMapFanout: opts?.maxMapFanout,
+        transformTimeoutMs: opts?.transformTimeoutMs,
+        transformMemoryMb: opts?.transformMemoryMb,
         now: FIXED_NOW,
       };
     },

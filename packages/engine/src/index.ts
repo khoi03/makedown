@@ -16,6 +16,12 @@ export {
 } from "./build.js";
 export { provisionSandbox, type SandboxHandle } from "./sandbox.js";
 export {
+  runSandboxedTransform,
+  DEFAULT_TRANSFORM_TIMEOUT_MS,
+  DEFAULT_TRANSFORM_MEMORY_MB,
+  type SandboxedTransformOptions,
+} from "./transform-sandbox.js";
+export {
   resolveInWorkspace,
   realResolveInWorkspace,
   PathEscapeError,
