@@ -9,6 +9,7 @@ import {
   parseCachePolicy,
   isValidTargetName,
   type BuildDoc,
+  type CachePolicy,
   type FrontMatter,
   type RecipeHeader,
   type TargetBlock,
@@ -169,7 +170,9 @@ function mergeDefaults(name: string, raw: RawRecipeHeader, fm: FrontMatter): Rec
     system: raw.system ?? fm.defaults?.system,
     params: { ...(fm.defaults?.params ?? {}), ...raw.params },
     output: raw.output ?? `${fm.artifactsDir}/${name}.md`,
-    cache: raw.cache ? parseCachePolicy(raw.cache) : (fm.defaults?.cache ?? { kind: "deterministic" }),
+    cache: raw.cache
+      ? parseCachePolicy(raw.cache)
+      : (fm.defaults?.cache ?? defaultCacheForStep(raw.step)),
     agent: raw.agent,
     sandbox: raw.sandbox,
     approval: raw.approval,
@@ -185,11 +188,27 @@ function mergeDefaults(name: string, raw: RawRecipeHeader, fm: FrontMatter): Rec
  */
 export const MAP_ITEM_REF = "item";
 
+/**
+ * Default cache policy when a target declares none and front matter sets none.
+ * `agent` runs are non-deterministic and side-effectful, so they default to
+ * `always` (recompute every build); everything else defaults to `deterministic`
+ * (SPEC §6, §7).
+ */
+function defaultCacheForStep(step: RawRecipeHeader["step"]): CachePolicy {
+  return step === "agent" ? { kind: "always" } : { kind: "deterministic" };
+}
+
 /** Validate that a step type carries the fields it cannot execute without (SPEC §4). */
 function assertStepRequirements(name: string, header: RecipeHeader, line: number): void {
   if (header.step === "transform" && !header.transform) {
     throw new BuildDocParseError(
       `Target "${name}" uses step: transform but omits the "transform" script path`,
+      line,
+    );
+  }
+  if (header.step === "agent" && !header.agent) {
+    throw new BuildDocParseError(
+      `Target "${name}" uses step: agent but omits the "agent" runtime id (e.g. agent: claude-code)`,
       line,
     );
   }

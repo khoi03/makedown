@@ -55,6 +55,18 @@ describe("parseBuildDoc", () => {
     expect(() => parseBuildDoc(bad)).toThrow(BuildDocParseError);
   });
 
+  it("requires an agent: id for step: agent", () => {
+    const bad = `## target: t\n\`\`\`yaml\ninputs: []\nstep: agent\n\`\`\`\nDo the thing.\n`;
+    expect(() => parseBuildDoc(bad)).toThrow(/agent/i);
+  });
+
+  it("defaults agent targets to cache: always (non-deterministic, side-effectful)", () => {
+    const doc = parseBuildDoc(
+      `## target: t\n\`\`\`yaml\ninputs: []\nstep: agent\nagent: claude-code\n\`\`\`\nDo it.\n`,
+    );
+    expect(doc.targets[0]!.header.cache).toEqual({ kind: "always" });
+  });
+
   it("round-trips through the serializer", () => {
     const once = parseBuildDoc(DOC);
     const twice = parseBuildDoc(serializeBuildDoc(once));
