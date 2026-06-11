@@ -1,6 +1,86 @@
-/* Design tokens — filled out with the real visual direction in Phase 2.3. */
+/*
+ * Makedown design tokens — "build workbench".
+ *
+ * Direction: a focused dark technical surface (Swiss/International grid, strong
+ * scale contrast) with one electric accent and a disciplined set of semantic
+ * build-status signals. Sans for prose, mono for the technical metadata that
+ * carries the product's identity (hashes, tokens, costs, the DAG).
+ */
 :root {
-  --color-surface: oklch(98% 0.005 250);
-  --color-text: oklch(20% 0.02 260);
-  --color-accent: oklch(62% 0.19 264);
+  color-scheme: dark;
+
+  /* Surfaces — layered depth from base to floating */
+  --surface-base: oklch(17% 0.012 274);
+  --surface-sunken: oklch(14% 0.012 274);
+  --surface-panel: oklch(21% 0.014 274);
+  --surface-raised: oklch(25% 0.016 274);
+  --surface-overlay: oklch(28% 0.018 274);
+
+  /* Borders / hairlines */
+  --border-subtle: oklch(30% 0.014 274);
+  --border-strong: oklch(40% 0.02 274);
+
+  /* Text */
+  --text-strong: oklch(97% 0.005 274);
+  --text: oklch(88% 0.008 274);
+  --text-muted: oklch(70% 0.014 274);
+  --text-faint: oklch(56% 0.016 274);
+
+  /* Accent — electric indigo */
+  --accent: oklch(67% 0.18 280);
+  --accent-hover: oklch(73% 0.18 280);
+  --accent-press: oklch(61% 0.18 280);
+  --accent-soft: oklch(67% 0.18 280 / 0.14);
+  --on-accent: oklch(99% 0.01 280);
+
+  /* Semantic build-status signals */
+  --status-fresh: oklch(74% 0.15 152);
+  --status-stale: oklch(80% 0.14 78);
+  --status-building: oklch(72% 0.15 240);
+  --status-denied: oklch(66% 0.2 25);
+  --status-skipped: oklch(60% 0.02 274);
+
+  /* Typography */
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.125rem;
+  --text-xl: clamp(1.35rem, 1.1rem + 1vw, 1.75rem);
+  --text-display: clamp(1.75rem, 1.2rem + 2.4vw, 2.75rem);
+
+  --tracking-tight: -0.02em;
+  --tracking-wide: 0.04em;
+  --leading-tight: 1.2;
+  --leading: 1.55;
+
+  /* Spacing scale */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-8: 3rem;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* Elevation */
+  --shadow-1: 0 1px 2px oklch(0% 0 0 / 0.3);
+  --shadow-2: 0 6px 20px oklch(0% 0 0 / 0.35);
+  --shadow-3: 0 18px 50px oklch(0% 0 0 / 0.5);
+
+  /* Motion */
+  --duration-fast: 130ms;
+  --duration-normal: 240ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Layout */
+  --topbar-h: 52px;
 }
