@@ -48,12 +48,37 @@ export function buildApi(deps: ApiDeps): FastifyInstance {
   const app = Fastify({ logger: deps.logger ?? false });
   const contextFactory = deps.contextFactory ?? makeServerContext;
 
+  // Treat an empty JSON body as "no body" instead of erroring, so bodyless
+  // POSTs (e.g. starting a build) succeed regardless of how the client sets the
+  // content-type header. Non-empty bodies parse as normal JSON.
+  app.addContentTypeParser(
+    "application/json",
+    { parseAs: "string" },
+    (_req, body, done) => {
+      const text = typeof body === "string" ? body.trim() : "";
+      if (text.length === 0) return done(null, undefined);
+      try {
+        done(null, JSON.parse(text));
+      } catch {
+        const err = new Error("Invalid JSON body") as Error & { statusCode?: number };
+        err.statusCode = 400;
+        done(err, undefined);
+      }
+    },
+  );
+
   app.setErrorHandler((error: Error, req, reply) => {
     if (error instanceof InvalidWorkspaceIdError) return reply.code(400).send({ error: error.message });
     if (error instanceof WorkspaceNotFoundError) return reply.code(404).send({ error: error.message });
     if (error.name === "InvalidBranchNameError") return reply.code(400).send({ error: error.message });
     if (error.name === "BuildDocParseError") return reply.code(422).send({ error: error.message });
     if (/^Unknown target:/.test(error.message)) return reply.code(404).send({ error: error.message });
+    // Honor a framework error's own client-error status (e.g. Fastify's
+    // FST_ERR_CTP_EMPTY_JSON_BODY = 400) rather than masking it as a 500.
+    const status = (error as { statusCode?: number }).statusCode;
+    if (typeof status === "number" && status >= 400 && status < 500) {
+      return reply.code(status).send({ error: error.message, name: error.name });
+    }
     // Unexpected: log the full error (name + stack) so 500s are diagnosable.
     req.log.error({ err: error }, `unhandled error on ${req.method} ${req.url}`);
     reply.code(500).send({ error: error.message, name: error.name });

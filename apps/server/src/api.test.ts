@@ -123,6 +123,19 @@ describe("buildApi", () => {
     expect(why.json().target).toBe("summary");
   });
 
+  it("accepts a build POST with content-type json but empty body (regression: FST_ERR_CTP_EMPTY_JSON_BODY -> 500)", async () => {
+    await makeWorkspace("alpha");
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/workspaces/alpha/build",
+      headers: { "content-type": "application/json" },
+      payload: "", // empty body with a JSON content-type — what the browser sent
+    });
+    expect(res.statusCode).toBe(202);
+    expect(res.json().jobId).toBeTruthy();
+    await manager.wait(res.json().jobId);
+  });
+
   it("GET artifact returns 404 before it is built", async () => {
     await makeWorkspace("alpha");
     const res = await app.inject({ method: "GET", url: "/api/workspaces/alpha/artifacts/summary" });

@@ -123,10 +123,14 @@ export class ApiClient {
   }
 
   private async post<T>(path: string, body?: unknown): Promise<T> {
+    // Only declare a JSON body when there actually is one. A POST with
+    // `content-type: application/json` and an empty body is rejected by Fastify
+    // (FST_ERR_CTP_EMPTY_JSON_BODY) — which is what `startBuild` (bodyless) hit.
+    const hasBody = body !== undefined;
     return this.request<T>(path, {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: hasBody ? { "content-type": "application/json" } : undefined,
+      body: hasBody ? JSON.stringify(body) : undefined,
     });
   }
 

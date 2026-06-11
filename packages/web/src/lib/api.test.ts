@@ -66,6 +66,15 @@ describe("ApiClient", () => {
     expect(calls[0]?.init?.method).toBe("POST");
   });
 
+  it("sends a bodyless POST WITHOUT a JSON content-type (regression: empty JSON body 500)", async () => {
+    const { fn, calls } = mockFetch([{ status: 202, body: { jobId: "j" } }]);
+    const api = new ApiClient("", fn);
+    await api.startBuild("ws");
+    const headers = (calls[0]?.init?.headers ?? {}) as Record<string, string>;
+    expect(headers["content-type"]).toBeUndefined();
+    expect(calls[0]?.init?.body).toBeUndefined();
+  });
+
   it("resolves an approval with a JSON body", async () => {
     const { fn, calls } = mockFetch([{ body: { resolved: true } }]);
     const api = new ApiClient("", fn);
