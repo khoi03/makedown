@@ -48,6 +48,18 @@ export const DEFAULT_MAP_FANOUT_CAP = 1000;
  * artifact — writing it to disk + CAS so downstream targets consume it — if the
  * approver resolves `true`.
  */
+/**
+ * A per-target lifecycle event emitted during {@link runBuild} via
+ * {@link BuildContext.onProgress}. Lets a caller (e.g. the cloud server) stream
+ * build progress without polling. Purely observational — never alters the build.
+ */
+export type BuildEvent =
+  | { readonly type: "target-start"; readonly target: string; readonly stale: boolean }
+  | { readonly type: "target-built"; readonly target: string }
+  | { readonly type: "target-reused"; readonly target: string }
+  | { readonly type: "target-denied"; readonly target: string }
+  | { readonly type: "target-skipped"; readonly target: string };
+
 export interface ApprovalRequest {
   readonly target: string;
   /** Identity hash the artifact would be stored under. */
@@ -87,6 +99,12 @@ export interface BuildContext {
   readonly transformContainerImage?: string;
   /** Clock injection for deterministic tests. Defaults to Date. */
   readonly now?: () => Date;
+  /**
+   * Optional observer of per-target build progress. Lets a caller stream
+   * lifecycle events (e.g. over SSE) without polling. See {@link BuildEvent}.
+   * Never affects the build outcome; exceptions thrown here are not caught.
+   */
+  readonly onProgress?: (event: BuildEvent) => void;
 }
 
 export interface TargetPlan {
@@ -216,16 +234,24 @@ export async function runBuild(doc: BuildDoc, ctx: BuildContext): Promise<BuildR
     const deps = plan.graph.nodes.get(tp.name)?.deps ?? [];
     if (deps.some((d) => denied.has(d))) {
       denied.add(tp.name);
+      ctx.onProgress?.({ type: "target-skipped", target: tp.name });
       continue;
     }
 
+    ctx.onProgress?.({ type: "target-start", target: tp.name, stale: tp.stale });
     if (tp.stale) {
       const accepted = await executeTarget(target, tp, ctx, outputs);
-      if (accepted) built.push(tp.name);
-      else denied.add(tp.name);
+      if (accepted) {
+        built.push(tp.name);
+        ctx.onProgress?.({ type: "target-built", target: tp.name });
+      } else {
+        denied.add(tp.name);
+        ctx.onProgress?.({ type: "target-denied", target: tp.name });
+      }
     } else {
       await materialize(tp, target, ctx);
       reused.push(tp.name);
+      ctx.onProgress?.({ type: "target-reused", target: tp.name });
     }
   }
 
