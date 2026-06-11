@@ -2,8 +2,6 @@ import { describe, it, expect } from "vitest";
 import { reduceBuildStatuses, applyEvent } from "./build-status.js";
 import type { BuildStreamEvent } from "./types.js";
 
-const progress = (e: BuildStreamEvent extends { type: "progress" } ? never : unknown) => e;
-
 describe("reduceBuildStatuses", () => {
   it("returns an empty map for no events", () => {
     expect(reduceBuildStatuses([])).toEqual({});

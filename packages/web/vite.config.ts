@@ -14,6 +14,20 @@ export default defineConfig({
       "/sync": { target: SERVER_ORIGIN, ws: true, changeOrigin: true },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Split the heavy editor/graph/CRDT vendors so they cache independently
+        // and stay off the landing route's critical path.
+        manualChunks: {
+          react: ["react", "react-dom"],
+          codemirror: ["codemirror", "@codemirror/state", "@codemirror/view", "@codemirror/lang-markdown"],
+          flow: ["@xyflow/react"],
+          yjs: ["yjs", "y-websocket", "y-codemirror.next"],
+        },
+      },
+    },
+  },
   test: {
     environment: "jsdom",
     globals: true,

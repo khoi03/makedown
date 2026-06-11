@@ -64,6 +64,14 @@ code,
 }
 
 /* ---- App shell: top bar + three-pane workbench ---- */
+.app-loading {
+  display: grid;
+  place-items: center;
+  height: 100vh;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
 .workbench {
   display: grid;
   grid-template-rows: var(--topbar-h) 1fr;
@@ -105,6 +113,24 @@ code,
   letter-spacing: var(--tracking-wide);
   color: var(--text-faint);
   font-weight: 600;
+}
+
+.pane__subject {
+  font-size: var(--text-xs);
+  color: var(--accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 50%;
+}
+
+.pane__error {
+  font-size: var(--text-xs);
+  color: var(--status-denied);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
 }
 
 .pane__body {

@@ -35,11 +35,13 @@ export class ApiClient {
     return `${this.baseUrl}/api/builds/${encodeURIComponent(jobId)}/events`;
   }
 
-  /** WebSocket URL for the collaborative sync of a workspace. */
-  syncUrl(workspaceId: string): string {
+  /**
+   * Base WebSocket URL for collaborative sync. y-websocket's WebsocketProvider
+   * appends `/<room>` (the workspace id), matching the server's `/sync/<id>`.
+   */
+  syncBaseUrl(): string {
     const httpBase = this.baseUrl || window.location.origin;
-    const wsBase = httpBase.replace(/^http/, "ws");
-    return `${wsBase}/sync/${encodeURIComponent(workspaceId)}`;
+    return `${httpBase.replace(/^http/, "ws")}/sync`;
   }
 
   async listWorkspaces(): Promise<string[]> {

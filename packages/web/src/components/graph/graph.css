@@ -1,0 +1,95 @@
+.graph {
+  height: 100%;
+  background: var(--surface-sunken);
+}
+
+.graph-empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+.target-node {
+  width: 200px;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-panel);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-1);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+.target-node:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-2);
+}
+.target-node[data-selected] {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    var(--shadow-2);
+}
+
+.target-node__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.target-node__name {
+  font-weight: 600;
+  color: var(--text-strong);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.target-node__step {
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+/* A subtle left accent encodes the step type. */
+.target-node {
+  border-left-width: 3px;
+}
+.target-node[data-step="chat"] {
+  border-left-color: var(--accent);
+}
+.target-node[data-step="agent"] {
+  border-left-color: var(--status-denied);
+}
+.target-node[data-step="transform"] {
+  border-left-color: var(--status-fresh);
+}
+.target-node[data-step="eval"] {
+  border-left-color: var(--status-stale);
+}
+.target-node[data-step="map"] {
+  border-left-color: var(--status-building);
+}
+
+.graph .react-flow__controls {
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: var(--shadow-2);
+}
+.graph .react-flow__controls-button {
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  fill: currentColor;
+}
+.graph .react-flow__controls-button:hover {
+  background: var(--surface-overlay);
+}
