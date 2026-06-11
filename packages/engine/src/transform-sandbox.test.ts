@@ -97,6 +97,19 @@ describe("runSandboxedTransform", () => {
     await expect(runSandboxedTransform({ scriptPath: p, inputs: {} })).rejects.toThrow(/boom/);
   });
 
+  it("does not expose the parent's secret environment to the script", async () => {
+    process.env.MAKEDOWN_TEST_SECRET = "sk-do-not-leak";
+    try {
+      const p = await script(
+        "env.mjs",
+        `export default () => "SECRET=" + (process.env.MAKEDOWN_TEST_SECRET ?? "absent");`,
+      );
+      expect(await runSandboxedTransform({ scriptPath: p, inputs: {} })).toBe("SECRET=absent");
+    } finally {
+      delete process.env.MAKEDOWN_TEST_SECRET;
+    }
+  });
+
   it("exposes sensible default limits", () => {
     expect(DEFAULT_TRANSFORM_TIMEOUT_MS).toBeGreaterThan(0);
     expect(DEFAULT_TRANSFORM_MEMORY_MB).toBeGreaterThan(0);

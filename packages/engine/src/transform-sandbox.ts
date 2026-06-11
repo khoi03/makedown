@@ -110,7 +110,11 @@ export async function runSandboxedTransform(
         `--allow-fs-read=${opts.scriptPath}`,
         runnerPath,
       ],
-      { stdio: ["pipe", "ignore", "pipe", "pipe"] },
+      // Scrub the environment: the permission model blocks filesystem but not
+      // `process.env`, so an inherited env would hand an untrusted script the
+      // workspace's API keys (which it could exfiltrate — network is not gated).
+      // Trusted transforms that need env should use `sandbox: none`.
+      { stdio: ["pipe", "ignore", "pipe", "pipe"], env: minimalEnv() },
     );
 
     return await new Promise<string | Uint8Array>((resolve, reject) => {
@@ -175,4 +179,19 @@ export async function runSandboxedTransform(
   } finally {
     await rm(runnerDir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+/**
+ * A minimal environment for the sandboxed child: no secrets. Keeps only the
+ * non-sensitive OS essentials a Node runtime may need (Windows path roots);
+ * notably omits every API key/credential the parent holds.
+ */
+function minimalEnv(): NodeJS.ProcessEnv {
+  const keep = process.platform === "win32" ? ["SystemRoot", "windir", "TEMP", "TMP"] : [];
+  const env: NodeJS.ProcessEnv = {};
+  for (const key of keep) {
+    const value = process.env[key];
+    if (value !== undefined) env[key] = value;
+  }
+  return env;
 }
