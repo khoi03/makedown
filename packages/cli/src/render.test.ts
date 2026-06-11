@@ -74,11 +74,24 @@ describe("renderBuildResult", () => {
       plan: plan([{ name: "a", stale: true }, { name: "b", stale: false }]),
       built: ["a"],
       reused: ["b"],
+      rejected: [],
     };
     const out = renderBuildResult(result, plain);
     expect(out).toContain("built");
     expect(out).toContain("reused");
     expect(out).toContain("1 built");
+  });
+
+  it("marks rejected targets (denied agent output) and counts them", () => {
+    const result: BuildResult = {
+      plan: plan([{ name: "refactor", stale: true }, { name: "summary", stale: true, deps: ["refactor"] }]),
+      built: [],
+      reused: [],
+      rejected: ["refactor", "summary"],
+    };
+    const out = renderBuildResult(result, plain);
+    expect(out).toContain("✗ rejected");
+    expect(out).toContain("2 rejected");
   });
 });
 

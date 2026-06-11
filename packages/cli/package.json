@@ -16,6 +16,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@makedown/agents": "workspace:*",
     "@makedown/engine": "workspace:*",
     "@makedown/format": "workspace:*",
     "@makedown/providers": "workspace:*",

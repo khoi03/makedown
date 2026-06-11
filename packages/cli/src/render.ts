@@ -51,16 +51,24 @@ export function renderGraph(plan: BuildPlan, s: Styler): string {
   return lines.join("\n");
 }
 
-/** `md build` — per-target built/reused lines plus a summary. */
+/** `md build` — per-target built/reused/rejected lines plus a summary. */
 export function renderBuildResult(result: BuildResult, s: Styler): string {
   const built = new Set(result.built);
-  const lines = result.plan.targets.map((tp) =>
-    built.has(tp.name)
-      ? `${s.green("✓ built ")}  ${tp.name}`
-      : `${s.dim("• reused")}  ${s.dim(tp.name)}`,
-  );
+  const rejected = new Set(result.rejected);
+  const label = (tp: { name: string }): string => {
+    if (built.has(tp.name)) return s.green("✓ built");
+    if (rejected.has(tp.name)) return s.red("✗ rejected");
+    return s.dim("• reused");
+  };
+  const lines = result.plan.targets.map((tp) => {
+    const name = built.has(tp.name) || rejected.has(tp.name) ? tp.name : s.dim(tp.name);
+    return `${padCell(label(tp), 10)}  ${name}`;
+  });
+
   lines.push("");
-  lines.push(`${s.green(`${result.built.length} built`)}${s.dim(`, ${result.reused.length} reused`)}`);
+  let summary = `${s.green(`${result.built.length} built`)}${s.dim(`, ${result.reused.length} reused`)}`;
+  if (result.rejected.length > 0) summary += s.red(`, ${result.rejected.length} rejected`);
+  lines.push(summary);
   return lines.join("\n");
 }
 

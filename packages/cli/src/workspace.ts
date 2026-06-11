@@ -4,7 +4,9 @@ import { isAbsolute, join, resolve } from "node:path";
 import { parseBuildDoc } from "@makedown/format";
 import { LocalCas, type BuildContext } from "@makedown/engine";
 import { createProviderRouter, type ProviderRouterConfig } from "@makedown/providers";
+import { ClaudeCodeAgentRunner } from "@makedown/agents";
 import type { BuildDoc } from "@makedown/shared";
+import { createInteractiveApprover } from "./approve.js";
 
 export const BUILD_FILE = "build.md";
 
@@ -38,9 +40,20 @@ export function routerConfigFromEnv(): ProviderRouterConfig {
   };
 }
 
-/** Build a BuildContext. A provider router is attached only when requested. */
+/**
+ * Build a BuildContext. For plan-only commands (status/why/cost/render) this is
+ * just the workspace + CAS. For an executing build (`withProvider`), it also
+ * wires the model router, the Claude Code agent runner, and an interactive
+ * approval gate so `agent` steps can run and be reviewed.
+ */
 export function makeContext(dir: string, withProvider = false): BuildContext {
   const cas = new LocalCas(join(dir, ".makedown"));
-  const provider = withProvider ? createProviderRouter(routerConfigFromEnv()) : undefined;
-  return { workspaceDir: dir, cas, provider };
+  if (!withProvider) return { workspaceDir: dir, cas };
+  return {
+    workspaceDir: dir,
+    cas,
+    provider: createProviderRouter(routerConfigFromEnv()),
+    agentRunner: new ClaudeCodeAgentRunner(),
+    approve: createInteractiveApprover(),
+  };
 }
