@@ -15,6 +15,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import * as Y from "yjs";
 import { loadSnapshot, applySnapshot, type WorkspaceSnapshot } from "./doc-model.js";
+import { saveDocState } from "./doc-state.js";
 
 const exec = promisify(execFile);
 
@@ -274,8 +275,15 @@ export class WorkspacePersistence {
     }
     if (this.destroyed) return;
     const snapshot = loadSnapshot(this.doc);
-    if (this.opts.onMaterialize) await this.opts.onMaterialize(snapshot);
-    else await materializeToDisk(snapshot, this.dir);
+    if (this.opts.onMaterialize) {
+      // Full override (tests / custom sinks): no disk side-effects.
+      await this.opts.onMaterialize(snapshot);
+      return;
+    }
+    await materializeToDisk(snapshot, this.dir);
+    // Persist the CRDT state too, so a reopened/restarted room restores the same
+    // history instead of re-inserting text (which would duplicate on sync).
+    await saveDocState(this.doc, this.dir);
   }
 
   /** Materialize and commit a named VCS snapshot. */

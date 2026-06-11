@@ -14,6 +14,7 @@ import {
   RoomRegistry,
   WorkspacePersistence,
   loadIntoDoc,
+  restoreDocState,
   attachWebSocketServer,
   type GitAuthor,
 } from "@makedown/sync";
@@ -66,7 +67,14 @@ export function createServer(opts: ServerOptions): AssembledServer {
     const attachPersistence = (): void => {
       persistences.set(id, new WorkspacePersistence(doc, dir, { author: opts.author }));
     };
-    loadIntoDoc(doc, dir).then(attachPersistence, attachPersistence);
+    // Restore the CRDT state FIRST (stable history, idempotent reconnects), THEN
+    // reconcile with the on-disk text — a no-op when they already match, a clean
+    // replace when the text changed out-of-band (e.g. a git branch switch).
+    // Order matters: text-loading before restoring would create a duplicate insert.
+    void (async () => {
+      await restoreDocState(doc, dir);
+      await loadIntoDoc(doc, dir);
+    })().then(attachPersistence, attachPersistence);
     return doc;
   }
 

@@ -39,6 +39,8 @@ export {
   type WorkspacePersistenceOptions,
 } from "./git-persistence.js";
 
+export { saveDocState, restoreDocState, docStatePath } from "./doc-state.js";
+
 export {
   WorkspaceRoom,
   RoomRegistry,
