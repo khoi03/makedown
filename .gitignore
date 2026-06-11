@@ -28,3 +28,9 @@ pnpm-debug.log*
 
 # Test coverage reports
 coverage/
+
+# Playwright (e2e) outputs
+test-results/
+playwright-report/
+blob-report/
+.last-run.json
