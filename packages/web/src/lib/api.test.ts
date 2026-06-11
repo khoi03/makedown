@@ -20,6 +20,30 @@ function mockFetch(responses: Array<{ status?: number; body: unknown }>) {
 describe("ApiClient", () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it("calls the global fetch with its native binding (regression: Illegal invocation)", async () => {
+    // Native fetch throws "Illegal invocation" if called with a `this` that is
+    // not the global object. Simulate that and construct ApiClient with no
+    // injected fetch so the default path is exercised.
+    const original = globalThis.fetch;
+    function picky(this: unknown): Promise<Response> {
+      if (this !== undefined && this !== globalThis) {
+        throw new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation");
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ workspaces: ["ws"] }),
+      } as Response);
+    }
+    globalThis.fetch = picky as unknown as typeof fetch;
+    try {
+      const api = new ApiClient();
+      expect(await api.listWorkspaces()).toEqual(["ws"]);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
   it("lists workspaces", async () => {
     const { fn, calls } = mockFetch([{ body: { workspaces: ["a", "b"] } }]);
     const api = new ApiClient("", fn);

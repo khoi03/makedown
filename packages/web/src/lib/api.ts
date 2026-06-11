@@ -25,10 +25,17 @@ export class ApiError extends Error {
 type FetchFn = typeof fetch;
 
 export class ApiClient {
+  private readonly fetchFn: FetchFn;
+
   constructor(
     private readonly baseUrl = "",
-    private readonly fetchFn: FetchFn = fetch,
-  ) {}
+    fetchFn?: FetchFn,
+  ) {
+    // The native `fetch` must be called with `this === Window`/`globalThis`.
+    // Stored as a class field and called as `this.fetchFn(...)`, an unbound
+    // reference would have `this === ApiClient` → "Illegal invocation". Bind it.
+    this.fetchFn = fetchFn ?? globalThis.fetch.bind(globalThis);
+  }
 
   /** Base URL for the build-events SSE stream (consumed via EventSource). */
   buildEventsUrl(jobId: string): string {
