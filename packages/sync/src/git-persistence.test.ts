@@ -129,7 +129,9 @@ describe("WorkspacePersistence (debounced autosave to working tree)", () => {
     const writes: string[] = [];
     const persistence = new WorkspacePersistence(doc, dir, {
       debounceMs: 50,
-      onMaterialize: (snap) => writes.push(snap.buildMd),
+      onMaterialize: (snap) => {
+        writes.push(snap.buildMd);
+      },
     });
 
     getBuildText(doc).insert(0, "a");
@@ -158,7 +160,9 @@ describe("WorkspacePersistence (debounced autosave to working tree)", () => {
     const writes: string[] = [];
     const persistence = new WorkspacePersistence(doc, dir, {
       debounceMs: 10,
-      onMaterialize: (snap) => writes.push(snap.buildMd),
+      onMaterialize: (snap) => {
+        writes.push(snap.buildMd);
+      },
     });
     persistence.destroy();
     getBuildText(doc).insert(0, "ignored");
