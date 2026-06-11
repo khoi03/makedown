@@ -36,3 +36,22 @@ export {
   type PersistenceOptions,
   type WorkspacePersistenceOptions,
 } from "./git-persistence.js";
+
+export {
+  WorkspaceRoom,
+  RoomRegistry,
+  encodeSyncStep1,
+  encodeSyncUpdate,
+  encodeAwarenessMessage,
+  readMessage,
+  MESSAGE_SYNC,
+  MESSAGE_AWARENESS,
+  type SyncConnection,
+  type RoomRegistryOptions,
+} from "./sync-server.js";
+
+export {
+  attachWebSocketServer,
+  workspaceIdFromPath,
+  type WebSocketAdapterOptions,
+} from "./ws-adapter.js";
