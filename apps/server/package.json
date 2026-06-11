@@ -5,9 +5,31 @@
   "type": "module",
   "license": "UNLICENSED",
   "description": "[COMMERCIAL] Cloud API: auth, billing, hosting, team RBAC, shared artifact CDN. Not Apache-2.0.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "makedown-server": "./dist/main.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "build": "echo \"@makedown/server: commercial package — not yet implemented\"",
-    "typecheck": "echo \"noop\"",
-    "test": "echo \"noop\""
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit",
+    "clean": "tsc -b --clean",
+    "start": "node dist/main.js",
+    "dev": "node --watch dist/main.js",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@fastify/websocket": "^11.0.1",
+    "@makedown/agents": "workspace:*",
+    "@makedown/engine": "workspace:*",
+    "@makedown/format": "workspace:*",
+    "@makedown/providers": "workspace:*",
+    "@makedown/shared": "workspace:*",
+    "@makedown/sync": "workspace:*",
+    "fastify": "^5.1.0",
+    "ws": "^8.18.0"
   }
 }
