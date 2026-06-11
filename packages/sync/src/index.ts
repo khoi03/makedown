@@ -18,3 +18,21 @@ export {
   applySnapshot,
   type WorkspaceSnapshot,
 } from "./doc-model.js";
+
+export {
+  readWorkspaceFromDisk,
+  materializeToDisk,
+  commitSnapshot,
+  listSnapshots,
+  currentBranch,
+  listBranches,
+  checkoutBranch,
+  saveSnapshot,
+  loadIntoDoc,
+  switchBranch,
+  WorkspacePersistence,
+  type Snapshot,
+  type GitAuthor,
+  type PersistenceOptions,
+  type WorkspacePersistenceOptions,
+} from "./git-persistence.js";
