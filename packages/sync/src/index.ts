@@ -27,6 +27,8 @@ export {
   currentBranch,
   listBranches,
   checkoutBranch,
+  assertValidBranchName,
+  InvalidBranchNameError,
   saveSnapshot,
   loadIntoDoc,
   switchBranch,

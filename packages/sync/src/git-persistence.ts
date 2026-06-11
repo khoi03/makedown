@@ -170,12 +170,38 @@ export async function listBranches(dir: string): Promise<string[]> {
     .filter((l) => l.length > 0);
 }
 
+export class InvalidBranchNameError extends Error {
+  constructor(name: string) {
+    super(`Invalid branch name: ${JSON.stringify(name)}`);
+    this.name = "InvalidBranchNameError";
+  }
+}
+
+/**
+ * A safe, conservative subset of git ref names. Crucially rejects a leading `-`
+ * (so the name can't be read as a git option) and `.`/path-like inputs (so
+ * `git checkout <name>` can't be coerced into a pathspec checkout that discards
+ * working-tree changes). Stricter than `git check-ref-format` on purpose.
+ */
+const BRANCH_NAME = /^(?![-./])(?!.*\.\.)(?!.*\/$)[A-Za-z0-9._\/-]+$/;
+
+/** Validate an externally-supplied branch name, throwing on anything unsafe. */
+export function assertValidBranchName(name: string): void {
+  if (name.length === 0 || name.length > 255 || !BRANCH_NAME.test(name) || name.endsWith(".lock")) {
+    throw new InvalidBranchNameError(name);
+  }
+}
+
 /** Check out a branch, optionally creating it from the current HEAD. */
 export async function checkoutBranch(
   dir: string,
   name: string,
   opts: { create?: boolean } = {},
 ): Promise<void> {
+  assertValidBranchName(name);
+  // No `--` separator here: `git checkout -- <name>` would force pathspec
+  // (file-restore) semantics. Safety comes from assertValidBranchName, which
+  // rejects a leading `-` so the name can never be read as an option.
   await git(dir, opts.create ? ["checkout", "-b", name] : ["checkout", name]);
 }
 

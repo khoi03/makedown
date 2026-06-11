@@ -164,6 +164,16 @@ describe("buildApi", () => {
     expect(list.json().snapshots[0].message).toBe("first");
   });
 
+  it("rejects an unsafe branch name with 400", async () => {
+    await makeWorkspace("alpha");
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/workspaces/alpha/branches",
+      payload: { name: "-f", create: true },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
   it("lists branches and creates/switches a branch", async () => {
     await makeWorkspace("alpha");
     await app.inject({ method: "POST", url: "/api/workspaces/alpha/snapshots", payload: { message: "init" } });

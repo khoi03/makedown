@@ -51,6 +51,7 @@ export function buildApi(deps: ApiDeps): FastifyInstance {
   app.setErrorHandler((error: Error, _req, reply) => {
     if (error instanceof InvalidWorkspaceIdError) return reply.code(400).send({ error: error.message });
     if (error instanceof WorkspaceNotFoundError) return reply.code(404).send({ error: error.message });
+    if (error.name === "InvalidBranchNameError") return reply.code(400).send({ error: error.message });
     if (error.name === "BuildDocParseError") return reply.code(422).send({ error: error.message });
     if (/^Unknown target:/.test(error.message)) return reply.code(404).send({ error: error.message });
     reply.code(500).send({ error: error.message });

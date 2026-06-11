@@ -13,6 +13,8 @@ import {
   listSnapshots,
   currentBranch,
   checkoutBranch,
+  assertValidBranchName,
+  InvalidBranchNameError,
   saveSnapshot,
   loadIntoDoc,
   switchBranch,
@@ -102,6 +104,17 @@ describe("git-backed persistence", () => {
 
     await switchBranch(doc, dir, "experiment");
     expect(loadSnapshot(doc).buildMd).toBe("experimental-content");
+  });
+
+  it("rejects unsafe branch names (argument injection) before touching git", async () => {
+    for (const bad of ["-f", "--orphan", ".", "..", "a/../b", "name with space", "", "feature/"]) {
+      await expect(checkoutBranch(dir, bad, { create: true })).rejects.toThrow(InvalidBranchNameError);
+    }
+    // A leading dash can never be passed to git as a flag.
+    expect(() => assertValidBranchName("-D")).toThrow(InvalidBranchNameError);
+    // Reasonable names pass.
+    expect(() => assertValidBranchName("feature/new-graph")).not.toThrow();
+    expect(() => assertValidBranchName("experiment_2")).not.toThrow();
   });
 
   it("does not commit when nothing changed (no empty snapshots)", async () => {
