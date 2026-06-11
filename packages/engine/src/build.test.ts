@@ -113,11 +113,11 @@ describe("runBuild", () => {
     expect(prov?.producedAt).toBe("2026-06-09T00:00:00.000Z");
   });
 
-  it("throws NotImplemented for step types other than chat", async () => {
+  it("errors when an agent target has no agent runner configured", async () => {
     const doc = parseBuildDoc(
       `## target: t\n\`\`\`yaml\ninputs: []\nstep: agent\nagent: claude-code\ncache: always\n\`\`\`\nbody\n`,
     );
-    await expect(runBuild(doc, ctx(new FakeProvider()))).rejects.toThrow(/not implemented/);
+    await expect(runBuild(doc, ctx(new FakeProvider()))).rejects.toThrow(/no agent runner/i);
   });
 
   it("errors when no provider is configured for a chat target", async () => {

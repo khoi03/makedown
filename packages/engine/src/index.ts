@@ -7,11 +7,13 @@ export {
   renderTarget,
   NotImplementedError,
   type BuildContext,
+  type ApprovalRequest,
   type BuildPlan,
   type TargetPlan,
   type BuildResult,
   type RenderedPrompt,
 } from "./build.js";
+export { provisionSandbox, type SandboxHandle } from "./sandbox.js";
 export {
   estimateBuildCost,
   estimateTokens,

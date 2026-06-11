@@ -23,6 +23,7 @@
   "dependencies": {
     "@makedown/shared": "workspace:*",
     "@makedown/format": "workspace:*",
-    "@makedown/providers": "workspace:*"
+    "@makedown/providers": "workspace:*",
+    "@makedown/agents": "workspace:*"
   }
 }

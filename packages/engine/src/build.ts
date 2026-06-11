@@ -8,18 +8,21 @@
  *
  * Each stale target is dispatched by step type: `chat`/`eval` and `map` call the
  * injected Provider; `transform` runs deterministic workspace code at zero token
- * cost; `agent` is not implemented yet (see PLAN.md, Phase 1). Prompt
- * interpolation and list parsing live in template.ts; cost estimation in cost.ts.
+ * cost; `agent` runs a general-purpose coding agent in an isolated sandbox behind
+ * an approval gate. Prompt interpolation and list parsing live in template.ts;
+ * cost estimation in cost.ts.
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { bareRef } from "@makedown/format";
 import type { Provider } from "@makedown/providers";
-import type { BuildDoc, Provenance, ResolvedInput, TargetBlock } from "@makedown/shared";
+import type { AgentRunner, AgentRunResult } from "@makedown/agents";
+import type { BuildDoc, Provenance, ResolvedInput, StepType, TargetBlock } from "@makedown/shared";
 import { computeIdentityHash, sha256 } from "./hash.js";
 import type { Cas } from "./cas.js";
 import { buildGraph, type BuildGraph } from "./graph.js";
+import { provisionSandbox } from "./sandbox.js";
 import { renderTemplate, readRefContent, parseList } from "./template.js";
 
 export class NotImplementedError extends Error {
@@ -29,12 +32,37 @@ export class NotImplementedError extends Error {
   }
 }
 
+/**
+ * The human-in-the-loop decision for an `approval: required` artifact (typically
+ * an `agent` step). The engine calls `ctx.approve` with this and only accepts the
+ * artifact — writing it to disk + CAS so downstream targets consume it — if the
+ * approver resolves `true`.
+ */
+export interface ApprovalRequest {
+  readonly target: string;
+  /** Identity hash the artifact would be stored under. */
+  readonly id: string;
+  /** Output path the artifact would be written to. */
+  readonly output: string;
+  /** The produced content (e.g. a diff), for the approver to inspect. */
+  readonly preview: string;
+  readonly step: StepType;
+}
+
 export interface BuildContext {
   /** Absolute path to the workspace root (where build.md + sources live). */
   readonly workspaceDir: string;
   readonly cas: Cas;
   /** Required to actually execute model steps; omit for plan-only. */
   readonly provider?: Provider;
+  /** Required to execute `agent` steps; omit for plan-only or model-only builds. */
+  readonly agentRunner?: AgentRunner;
+  /**
+   * Approval gate for `approval: required` targets. If absent, such targets are
+   * denied (their artifact is not accepted) — a safe default for side-effectful
+   * agent output.
+   */
+  readonly approve?: (request: ApprovalRequest) => Promise<boolean>;
   /** Clock injection for deterministic tests. Defaults to Date. */
   readonly now?: () => Date;
 }
@@ -137,6 +165,11 @@ export interface BuildResult {
   readonly plan: BuildPlan;
   readonly built: readonly string[];
   readonly reused: readonly string[];
+  /**
+   * Targets not produced because an `approval: required` artifact was denied —
+   * plus any downstream targets skipped because that upstream artifact is missing.
+   */
+  readonly rejected: readonly string[];
 }
 
 /** Execute the build: recompute only stale targets, reuse the rest. */
@@ -146,40 +179,59 @@ export async function runBuild(doc: BuildDoc, ctx: BuildContext): Promise<BuildR
   const outputs = new Map(doc.targets.map((t) => [t.name, t.header.output] as const));
   const built: string[] = [];
   const reused: string[] = [];
+  const denied = new Set<string>();
 
   for (const tp of plan.targets) {
     const target = byName.get(tp.name);
     if (!target) continue;
 
+    // A target whose dependency was denied (unapproved agent output) can't be
+    // produced — skip it and propagate the denial downstream.
+    const deps = plan.graph.nodes.get(tp.name)?.deps ?? [];
+    if (deps.some((d) => denied.has(d))) {
+      denied.add(tp.name);
+      continue;
+    }
+
     if (tp.stale) {
-      await executeTarget(target, tp, ctx, outputs);
-      built.push(tp.name);
+      const accepted = await executeTarget(target, tp, ctx, outputs);
+      if (accepted) built.push(tp.name);
+      else denied.add(tp.name);
     } else {
       await materialize(tp, target, ctx);
       reused.push(tp.name);
     }
   }
 
-  return { plan, built, reused };
+  return { plan, built, reused, rejected: [...denied] };
 }
 
-/** Dispatch a stale target to the executor for its step type. */
+/**
+ * Dispatch a stale target to the executor for its step type. Returns `true` when
+ * the artifact was produced and accepted, `false` when an `agent` artifact was
+ * denied at the approval gate.
+ */
 async function executeTarget(
   target: TargetBlock,
   tp: TargetPlan,
   ctx: BuildContext,
   outputs: ReadonlyMap<string, string>,
-): Promise<void> {
+): Promise<boolean> {
   switch (target.header.step) {
     case "chat":
     case "eval":
-      return target.header.cache.kind === "stochastic"
+      await (target.header.cache.kind === "stochastic"
         ? executeStochasticModelStep(target, tp, ctx, outputs)
-        : executeModelStep(target, tp, ctx, outputs);
+        : executeModelStep(target, tp, ctx, outputs));
+      return true;
     case "transform":
-      return executeTransform(target, tp, ctx, outputs);
+      await executeTransform(target, tp, ctx, outputs);
+      return true;
     case "map":
-      return executeMap(target, tp, ctx, outputs);
+      await executeMap(target, tp, ctx, outputs);
+      return true;
+    case "agent":
+      return executeAgentStep(target, tp, ctx, outputs);
     default:
       throw new NotImplementedError(
         `step "${target.header.step}" is not implemented yet (target "${target.name}")`,
@@ -393,6 +445,94 @@ async function executeMap(
     producedAt: timestamp(ctx),
   };
   await ctx.cas.putProvenance(provenance);
+}
+
+/**
+ * Run an `agent` step: a general-purpose coding agent in an isolated sandbox.
+ *
+ * The engine renders the task prompt, provisions a sandbox per the target's
+ * `sandbox` policy (a throwaway git worktree by default), and hands it to the
+ * injected runner. The sandbox is always torn down. If `approval: required`, the
+ * produced artifact is gated behind `ctx.approve` — denied output is never
+ * written to disk or the CAS, so downstream targets cannot consume it. Returns
+ * `false` when the artifact was denied.
+ */
+async function executeAgentStep(
+  target: TargetBlock,
+  tp: TargetPlan,
+  ctx: BuildContext,
+  outputs: ReadonlyMap<string, string>,
+): Promise<boolean> {
+  if (!ctx.agentRunner) {
+    throw new Error(`No agent runner configured; cannot execute agent target "${target.name}"`);
+  }
+
+  const prompt = await renderTemplate(target.body, ctx.workspaceDir, outputs, false);
+  const system = target.header.system
+    ? await renderTemplate(target.header.system, ctx.workspaceDir, outputs, false)
+    : undefined;
+
+  const sandbox = await provisionSandbox(ctx.workspaceDir, target.header.sandbox);
+  let result: AgentRunResult;
+  let durationMs: number;
+  let diff: string | undefined;
+  try {
+    const start = Date.now();
+    result = await ctx.agentRunner.run({
+      agent: target.header.agent ?? "",
+      model: target.header.model,
+      system,
+      prompt,
+      params: target.header.params,
+      workdir: sandbox.dir,
+    });
+    durationMs = Date.now() - start;
+    diff = await sandbox.diff();
+  } finally {
+    await sandbox.cleanup();
+  }
+
+  // The artifact is the work the agent actually did — the unified diff of its
+  // sandbox — falling back to the agent's text summary when the sandbox can't
+  // produce a diff (e.g. `sandbox: none`) or the agent changed nothing.
+  const artifactText = diff && diff.trim().length > 0 ? diff : result.output;
+
+  // Approval gate: side-effectful agent output is accepted only on explicit
+  // approval. No approver wired ⇒ deny (safe default).
+  if (target.header.approval === "required") {
+    const approved = ctx.approve
+      ? await ctx.approve({
+          target: target.name,
+          id: tp.id,
+          output: target.header.output,
+          preview: artifactText,
+          step: "agent",
+        })
+      : false;
+    if (!approved) return false;
+  }
+
+  const content = new TextEncoder().encode(artifactText);
+  await ctx.cas.put(tp.id, content);
+  await writeOutput(ctx, target.header.output, content);
+
+  const provenance: Provenance = {
+    target: target.name,
+    id: tp.id,
+    output: target.header.output,
+    step: "agent",
+    model: target.header.model,
+    params: target.header.params,
+    inputs: tp.inputs,
+    promptHash: sha256(prompt),
+    tokens: result.usage,
+    costUsd: result.costUsd,
+    durationMs,
+    producedAt: timestamp(ctx),
+    producedBy: result.producedBy,
+  };
+  await ctx.cas.putProvenance(provenance);
+  return true;
 }
 
 /**
