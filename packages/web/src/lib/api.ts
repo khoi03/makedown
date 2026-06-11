@@ -45,9 +45,14 @@ export class ApiClient {
   /**
    * Base WebSocket URL for collaborative sync. y-websocket's WebsocketProvider
    * appends `/<room>` (the workspace id), matching the server's `/sync/<id>`.
+   *
+   * In dev this points directly at the server (`__SYNC_ORIGIN__`, injected by
+   * Vite) to bypass the unreliable ws proxy; otherwise it falls back to the
+   * client's own origin (same-origin production deploy).
    */
   syncBaseUrl(): string {
-    const httpBase = this.baseUrl || window.location.origin;
+    const injected = typeof __SYNC_ORIGIN__ !== "undefined" ? __SYNC_ORIGIN__ : "";
+    const httpBase = injected || this.baseUrl || window.location.origin;
     return `${httpBase.replace(/^http/, "ws")}/sync`;
   }
 
