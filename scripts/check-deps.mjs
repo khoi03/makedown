@@ -1,6 +1,8 @@
-#!/usr/bin/env node
 /**
  * Open-core boundary guard (PLAN.md §15).
+ *
+ * Run via `node scripts/check-deps.mjs` (no shebang: it's imported by its test,
+ * and a shebang line breaks transform-based importers like vitest).
  *
  * The OSS packages (Apache-2.0) must run fully standalone and must never depend
  * on the commercial packages. This script fails if any OSS source file imports

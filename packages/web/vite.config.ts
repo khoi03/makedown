@@ -42,5 +42,8 @@ export default defineConfig(({ mode }) => ({
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
     css: false,
+    // Playwright specs live under e2e/ and must not be collected by vitest.
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    exclude: ["e2e/**", "node_modules/**", "dist/**"],
   },
 }));

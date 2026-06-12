@@ -126,9 +126,11 @@ branch model, a Fastify server that drives the engine with streaming build
 progress (SSE) and a human approval gate, and a React **build workbench**
 (collaborative editor + live DAG + artifact/provenance/cost inspector). Remaining:
 Phase 2.4 (auth, RBAC, billing, shared artifact CDN). Engine = TypeScript.
-**319 tests** (314 package + 5 script); engine ~95% / sync ~95% / server ~91%
-statement coverage. The dependency-direction guard (`pnpm lint:deps`) keeps the
-OSS packages free of any commercial import.
+**323 unit/integration tests** + **5 script tests** + a **2-spec Playwright e2e**
+that drives a real browser against the real server (open → live-edit → build →
+artifact, and two-client sync); engine ~95% / sync ~95% / server ~91% statement
+coverage. The dependency-direction guard (`pnpm lint:deps`) keeps the OSS
+packages free of any commercial import.
 
 ## Develop
 
@@ -179,6 +181,19 @@ target with `approval: required` pops an approval modal showing its diff.
 > **Security:** the server has no auth yet (Phase 2.4). Run it locally or on a
 > trusted network only — build endpoints execute workspace code (sandboxed per
 > Phase 1.5). Don't expose it publicly until 2.4 adds auth + RBAC.
+
+### End-to-end test (real browser ↔ real server)
+
+The collaborative surface has a Playwright e2e that boots the actual server
+(against a throwaway copy of a zero-dependency `transform` fixture — no API key)
+plus Vite, then drives Chromium through the full flow. This is the layer that
+catches browser↔server integration regressions the unit suite can't see.
+
+```bash
+pnpm --filter @makedown/server build      # the e2e launcher imports the built server
+pnpm --filter @makedown/web e2e:install   # one-time: download Chromium
+pnpm --filter @makedown/web e2e           # boots server + web, runs the specs
+```
 
 ## License
 

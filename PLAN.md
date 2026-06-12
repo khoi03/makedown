@@ -354,6 +354,19 @@ The open-core decision splits the monorepo by license. Keep this boundary clean 
 
 > **Security note (pre-2.4):** the server has **no auth yet** (deferred to Phase 2.4). Run it locally / on a trusted network only — the build endpoints execute workspace code (transform/agent steps, sandboxed per Phase 1.5). Do not expose publicly until 2.4 lands auth + RBAC.
 
+### Post-merge hardening (live-testing fixes + e2e · 2026-06-12)
+Running the app by hand surfaced **7 browser↔server integration bugs the unit suite missed** — all now fixed, each with a regression test:
+1. `ApiClient` called the global `fetch` as a method → `this`-binding lost → "Illegal invocation" on every request. Bind to `globalThis`.
+2. Vite's `/sync` ws proxy was unreliable (`ECONNABORTED`/`ECONNRESET`); connect the collab WebSocket **directly to the server** in dev (`__SYNC_ORIGIN__`), HTTP `/api` still proxied.
+3. **CRDT content duplication:** loading build.md *text* into a fresh Y.Doc on every room (re)creation is a Yjs anti-pattern (merges ops, not states) → content compounded to **megabytes** → parse failed. Fix: persist/restore the encoded **CRDT state** (`.makedown/sync/ydoc.bin`) so reopens/restarts keep one stable history; restore-before-text-reconcile.
+4. `server.close()` leaked the per-workspace persistence debounce timers (post-shutdown writes / `ENOTEMPTY`). Add `dispose()`.
+5. **Build 500:** bodyless `POST /build` was sent with `content-type: application/json` + empty body → Fastify `FST_ERR_CTP_EMPTY_JSON_BODY` masked as 500. Client omits the header when bodyless; server tolerates empty JSON bodies + honors framework 4xx codes.
+6. **React `StrictMode`** double-bound the CodeMirror editor to the shared `Y.Text` (dev double-invoke) → doc doubled. Removed `StrictMode`.
+7. WS handler hardening + branch-name validation (from the pre-merge review/security pass).
+- **Hardening added:** a **Playwright e2e** (`packages/web/e2e`) that boots the real server (temp copy of a zero-dep `transform` fixture, no API key) + Vite and drives Chromium through open → live-edit → build → artifact, plus two-client sync + a no-duplication assertion. This is the layer that would have caught #1, #3, #5, #6 automatically.
+- **Verified working end-to-end by the user (2026-06-12)** after a clean-slate reset. All green: **323 package + 5 script tests + 2 e2e specs**.
+- Known residual sharpness (not blocking): the text↔CRDT hybrid can still duplicate if a *stale* browser tab holding a divergent doc reconnects; a clean start is stable. A future option is making the persisted CRDT state the sole source of truth (deriving text only for the engine/git).
+
 ### Remaining
 1. **Phase 2.4 — multi-tenant**: auth, team RBAC, billing (Stripe), shared artifact CDN + `md share` published views, Postgres provenance index. *Re-plan after the collab core is exercised.*
 2. **Later hardening (optional):** agent-in-container (a containerized agent runner); a `transform` script that needs allow-listed `node_modules` under the subprocess sandbox; an example workspace demoing `sandbox: container`.
