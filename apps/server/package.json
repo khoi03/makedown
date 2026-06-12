@@ -28,11 +28,14 @@
     "@makedown/providers": "workspace:*",
     "@makedown/shared": "workspace:*",
     "@makedown/sync": "workspace:*",
+    "drizzle-orm": "^0.45.2",
     "fastify": "^5.1.0",
+    "postgres": "^3.4.9",
     "ws": "^8.18.0",
     "yjs": "^13.6.20"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.2",
     "@types/ws": "^8.5.13",
     "y-protocols": "^1.0.6"
   }

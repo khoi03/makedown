@@ -1,5 +1,6 @@
 /** Top bar: identity, connection, branch, snapshot, and the build action. */
 import type { ConnectionStatus } from "../../hooks/useCollaborativeDoc.js";
+import { AccountMenu } from "../auth/AccountMenu.js";
 import "./toolbar.css";
 
 export interface Presence {
@@ -47,6 +48,7 @@ export function Toolbar(props: ToolbarProps) {
           {building ? <Spinner /> : <PlayIcon />}
           {building ? "Building…" : "Build"}
         </button>
+        <AccountMenu />
       </div>
     </header>
   );

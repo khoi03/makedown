@@ -6,6 +6,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { ApiClient } from "./lib/api.js";
 import { makeLocalUser } from "./hooks/useCollaborativeDoc.js";
 import { WorkspacePicker } from "./components/WorkspacePicker.js";
+import { AuthGate } from "./components/auth/AuthGate.js";
 
 // The workbench pulls in the heavy editor/graph/CRDT stack — load it only when
 // a workspace is actually opened, keeping the landing route lightweight.
@@ -29,13 +30,17 @@ export function App() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  if (!workspaceId) {
-    return <WorkspacePicker api={api} onPick={(id) => (window.location.hash = `#/${encodeURIComponent(id)}`)} />;
-  }
-
-  return (
+  const body = !workspaceId ? (
+    <WorkspacePicker api={api} onPick={(id) => (window.location.hash = `#/${encodeURIComponent(id)}`)} />
+  ) : (
     <Suspense fallback={<div className="app-loading">Opening workspace…</div>}>
       <Workbench key={workspaceId} api={api} workspaceId={workspaceId} user={user} />
     </Suspense>
+  );
+
+  // The gate is a no-op (renders `body` directly) when the server is
+  // single-tenant; it only interposes a sign-in screen when auth is enabled.
+  return (
+    <AuthGate api={api}>{body}</AuthGate>
   );
 }
