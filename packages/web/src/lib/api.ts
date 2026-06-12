@@ -22,6 +22,25 @@ export class ApiError extends Error {
   }
 }
 
+/** A user account (never includes the password hash). */
+export interface AuthUser {
+  readonly id: string;
+  readonly email: string;
+}
+
+/** An organization the user belongs to. */
+export interface Org {
+  readonly id: string;
+  readonly name: string;
+  readonly slug: string;
+}
+
+/** The result of a successful signup/login. */
+export interface AuthSession {
+  readonly user: AuthUser;
+  readonly org: Org;
+}
+
 type FetchFn = typeof fetch;
 
 export class ApiClient {
@@ -56,8 +75,53 @@ export class ApiClient {
     return `${httpBase.replace(/^http/, "ws")}/sync`;
   }
 
+  // --- tenancy / auth (no-ops on a single-tenant server) -------------------
+
+  /** Whether the server has auth/RBAC enabled. */
+  getTenancy(): Promise<{ enabled: boolean }> {
+    return this.get<{ enabled: boolean }>("/api/tenancy");
+  }
+
+  /** The signed-in user, or `undefined` when not authenticated (401). */
+  async getSession(): Promise<AuthUser | undefined> {
+    const res = await this.fetchFn(`${this.baseUrl}/api/auth/me`, {
+      method: "GET",
+      credentials: "include",
+    });
+    if (res.status === 401) return undefined;
+    const body = await this.parse<{ user: AuthUser }>(res);
+    return body.user;
+  }
+
+  signup(email: string, password: string): Promise<AuthSession> {
+    return this.post<AuthSession>("/api/auth/signup", { email, password });
+  }
+
+  login(email: string, password: string): Promise<AuthSession> {
+    return this.post<AuthSession>("/api/auth/login", { email, password });
+  }
+
+  async logout(): Promise<void> {
+    await this.post("/api/auth/logout");
+  }
+
+  async listOrgs(): Promise<Org[]> {
+    const { orgs } = await this.get<{ orgs: Org[] }>("/api/orgs");
+    return orgs;
+  }
+
+  async registerWorkspace(orgId: string, workspaceId: string): Promise<void> {
+    await this.post(`/api/orgs/${enc(orgId)}/workspaces`, { workspaceId });
+  }
+
   async listWorkspaces(): Promise<string[]> {
     const { workspaces } = await this.get<{ workspaces: string[] }>("/api/workspaces");
+    return workspaces;
+  }
+
+  /** On-disk workspaces not yet claimed by any org (empty on a single-tenant server). */
+  async listAvailableWorkspaces(): Promise<string[]> {
+    const { workspaces } = await this.get<{ workspaces: string[] }>("/api/workspaces/available");
     return workspaces;
   }
 
@@ -117,7 +181,10 @@ export class ApiClient {
   }
 
   private async getOrUndefined<T>(path: string): Promise<T | undefined> {
-    const res = await this.fetchFn(`${this.baseUrl}${path}`, { method: "GET" });
+    const res = await this.fetchFn(`${this.baseUrl}${path}`, {
+      method: "GET",
+      credentials: "include",
+    });
     if (res.status === 404) return undefined;
     return this.parse<T>(res);
   }
@@ -135,7 +202,9 @@ export class ApiClient {
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {
-    const res = await this.fetchFn(`${this.baseUrl}${path}`, init);
+    // Always include credentials so the session cookie rides along (a no-op for
+    // a single-tenant server that sets no cookie).
+    const res = await this.fetchFn(`${this.baseUrl}${path}`, { credentials: "include", ...init });
     return this.parse<T>(res);
   }
 
