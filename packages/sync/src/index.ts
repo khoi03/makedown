@@ -1,5 +1,5 @@
 /**
- * @makedown/sync — [COMMERCIAL] real-time collaboration layer.
+ * @makedown/sync — AGPL-3.0 real-time collaboration layer.
  *
  * Public surface is filled in across Phase 2.1:
  *  - the Yjs workspace document model (doc-model.ts)

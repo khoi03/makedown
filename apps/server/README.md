@@ -1,7 +1,10 @@
-# @makedown/server — COMMERCIAL
+# @makedown/server — AGPL-3.0
 
-Placeholder for the commercial cloud backend: authentication, billing, hosted
-workspaces, team RBAC, and the shared/published-artifact CDN. Wraps the OSS
-engine; provides the multi-tenant control plane the OSS CLI does not.
+The server backend: build orchestration, SSE progress streaming, git snapshots,
+and (Phase 2.4) authentication, team RBAC, an optional Postgres provenance index,
+and `md share` published views. Wraps the Apache-2.0 engine; provides the
+control plane the CLI does not.
 
-**License:** proprietary — **not** Apache-2.0. See `PLAN.md` §15.
+**License:** **AGPL-3.0** (see [`LICENSE`](./LICENSE)) — dual-licensed; a
+commercial exception is available, see [`/LICENSING.md`](../../LICENSING.md) and
+`PLAN.md` §15.

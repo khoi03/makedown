@@ -1,12 +1,12 @@
-# @makedown/sync — COMMERCIAL
+# @makedown/sync — AGPL-3.0
 
-Placeholder for the commercial real-time collaboration layer:
+The real-time collaboration layer:
 
 - **Yjs CRDT** document sync for `build.md` and source files
 - **git-backed** workspace persistence (snapshots ↔ commits, branches)
 - presence, cursors, comments
 
-**License:** proprietary / source-available — **not** Apache-2.0. This package is
-intentionally outside the open-source boundary (see `PLAN.md` §15). The OSS engine
-(`@makedown/engine`) must never import from here; a dependency-direction lint
-enforces this.
+**License:** **AGPL-3.0** (see [`LICENSE`](./LICENSE)) — dual-licensed; a
+commercial exception is available, see [`/LICENSING.md`](../../LICENSING.md) and
+`PLAN.md` §15. The Apache-2.0 framework (e.g. `@makedown/engine`) must never
+import from here; the engine-standalone lint (`pnpm lint:deps`) enforces this.

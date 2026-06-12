@@ -277,25 +277,33 @@ makedown/
 
 1. **Engine language → TypeScript.** Headless, clean API boundary so it can be ported to Rust later if perf demands. Same language as CLI + web; Claude Agent SDK is TS-native.
 2. **Primary surface → Web-first cloud + CLI.** Real-time collab is a core requirement and hardest in desktop. Local-first-with-sync (git-backed) to avoid lock-in. Phase 0 remains a headless CLI engine spike.
-3. **Positioning → Open-core.** OSS the engine + `build.md` format + CLI (permissive license, community/GitHub distribution like the competitors); monetize cloud collaboration, hosting, and team features. *See §15 for the open-core boundary.*
+3. **Positioning → ~~Open-core~~ Dual-license** *(superseded 2026-06-12 — see §15 pivot)*. ~~OSS the engine + format + CLI, monetize cloud collaboration/hosting/team features.~~ Now: **all code is open source** (Apache-2.0 framework + AGPL-3.0 server/collab); monetize **commercial exceptions** to the AGPL, not withheld code or in-app billing. *See §15.*
 4. **Brand → keep `Makedown` as working name** through Phase 0; defer final branding/trademark until the engine spike proves the concept.
 5. **CRDT → Yjs** (default; larger ecosystem). Phase 2, revisit if Automerge's git-like merge fits better.
 6. **Phase 0 providers → Anthropic-only.** Add others via the `providers` adapter layer later.
 
-## 15. Open-core boundary (architectural constraint)
+## 15. Licensing model + the engine-standalone discipline
 
-The open-core decision splits the monorepo by license. Keep this boundary clean from day one — it's expensive to retrofit.
+> **Pivot (2026-06-12): open-core → dual-license.** The original plan kept the
+> collab/server layer *proprietary* and sold it (open-core). That was abandoned
+> in favor of **dual-licensing** (Dify/PostHog/Grafana-style): **all code is open
+> source**, and revenue (if any) comes from selling **commercial exceptions** to
+> the copyleft license — not from withholding code or from in-app billing. The
+> trigger: maximize adoption while the category wedge is still open, and avoid the
+> effort/cost of running hosting + billing. **Billing is dropped from the roadmap.**
+> Canonical details live in [`LICENSING.md`](./LICENSING.md) + [`COMMERCIAL-LICENSE.md`](./COMMERCIAL-LICENSE.md).
 
 | Layer | License | Package(s) | Rationale |
 |---|---|---|---|
-| **Open source** | Apache-2.0 (patent grant > MIT for a format/spec) | `engine`, `format`, `cli`, `providers`, `shared` | Drives adoption; the `build.md` format must be an **open spec** so the graph isn't lock-in. Distribute via npm + GitHub. |
-| **Commercial** | Proprietary / source-available | `sync` (CRDT server + git backing), `web` (collab editor), `apps/server` (auth, billing, hosting, team RBAC, shared artifact CDN) | The cloud collaboration + hosting is the paid moat — exactly the part that's hard to self-host well. |
+| **Framework** | **Apache-2.0** (patent grant > MIT for a format/spec) | `engine`, `format`, `cli`, `providers`, `shared`, `agents` | Drives adoption; the `build.md` format must be an **open spec** so the graph isn't lock-in. Free for any use, incl. commercial. |
+| **Server & collaboration** | **AGPL-3.0** + sold commercial exception | `sync` (CRDT server + git backing), `web` (collab editor), `apps/server` (auth, team RBAC, shared artifact views) | Open + self-hostable for everyone; the AGPL stops a hyperscaler from taking the hard hosted-collab part closed-source as a competing SaaS without contributing back (or buying a commercial license). |
 
 **Implications:**
-- The OSS engine must run **fully standalone** (local CAS + SQLite, no cloud dependency) — a great solo/CI experience is the top-of-funnel.
-- No proprietary imports leak into OSS packages; enforce with a dependency-direction lint.
-- `build.md` format gets its own versioned **SPEC.md** in the OSS repo.
-- Two-repo or one-monorepo-with-license-headers? *Lean: single monorepo, per-package `LICENSE`, clear `packages/` (OSS) vs `apps/` + `packages/sync` + `packages/web` (commercial) split.*
+- The **Apache-2.0 framework must run fully standalone** (local CAS + SQLite, no server/DB) — a great solo/CI experience is the top-of-funnel. This is now an **architectural** discipline (keep the engine dependency-light), no longer a *license* boundary.
+- The framework packages **never import** the AGPL server/collab packages; enforce with the dependency-direction lint (`scripts/check-deps.mjs`, `pnpm lint:deps`). The lint survives the pivot — its rationale is re-stated as "engine stays standalone," not "OSS can't import proprietary."
+- `build.md` format keeps its own versioned **SPEC.md**.
+- Single monorepo, **per-package `LICENSE`**: root `LICENSE` = Apache-2.0 (framework); each AGPL package ships the AGPL-3.0 text. Dual-licensing requires the maintainer to hold relicensing rights over contributions (CLA if/when contributors arrive — noted in `LICENSING.md`).
+- **AGPL is effectively one-way once published**: a shipped release stays AGPL. Future versions can still be relicensed by the copyright holder, but published bytes can't be clawed back.
 
 ---
 

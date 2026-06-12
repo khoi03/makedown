@@ -1,7 +1,8 @@
-# @makedown/web — COMMERCIAL
+# @makedown/web — AGPL-3.0
 
-Placeholder for the commercial web app: the Notion-style collaborative editor
-over `build.md` + sources, a live build-graph (DAG) view, and the artifact
-viewer / shareable published views.
+The web app: a Notion-style collaborative editor over `build.md` + sources, a
+live build-graph (DAG) view, and the artifact viewer / shareable published views.
 
-**License:** proprietary — **not** Apache-2.0. See `PLAN.md` §15.
+**License:** **AGPL-3.0** (see [`LICENSE`](./LICENSE)) — dual-licensed; a
+commercial exception is available, see [`/LICENSING.md`](../../LICENSING.md) and
+`PLAN.md` §15.

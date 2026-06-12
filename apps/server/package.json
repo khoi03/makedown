@@ -3,8 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
-  "description": "[COMMERCIAL] Cloud API: auth, billing, hosting, team RBAC, shared artifact CDN. Not Apache-2.0.",
+  "license": "AGPL-3.0-only",
+  "description": "Server API: build orchestration, SSE, git snapshots, and (Phase 2.4) auth, team RBAC, shared artifact views. AGPL-3.0 (dual-licensed; commercial exception available — see /LICENSING.md).",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {

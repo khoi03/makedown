@@ -3,8 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
-  "description": "[COMMERCIAL] Real-time collaboration (Yjs CRDT) + git-backed workspace sync. Not Apache-2.0.",
+  "license": "AGPL-3.0-only",
+  "description": "Real-time collaboration (Yjs CRDT) + git-backed workspace sync. AGPL-3.0 (dual-licensed; commercial exception available — see /LICENSING.md).",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

@@ -3,8 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "license": "UNLICENSED",
-  "description": "[COMMERCIAL] Collaborative Markdown editor + live DAG view + artifact viewer (React). Not Apache-2.0.",
+  "license": "AGPL-3.0-only",
+  "description": "Collaborative Markdown editor + live DAG view + artifact viewer (React). AGPL-3.0 (dual-licensed; commercial exception available — see /LICENSING.md).",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

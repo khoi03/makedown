@@ -1,5 +1,5 @@
 /**
- * @makedown/server — [COMMERCIAL] cloud API.
+ * @makedown/server — AGPL-3.0 server API.
  *
  * Public surface (Phase 2.2): the workspace service, build orchestration, the
  * Fastify HTTP/SSE API, and the bootstrap that mounts the realtime sync server.

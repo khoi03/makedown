@@ -78,15 +78,16 @@ provenance-tracked artifacts. That engine is the whole bet. See
 [`PLAN.md`](./PLAN.md) for the full research dossier and roadmap, and
 [`SPEC.md`](./SPEC.md) for the `build.md` format.
 
-## Open-core
+## Licensing (dual-license)
 
 | Layer | License | Packages |
 |---|---|---|
-| **Open source** | Apache-2.0 | `engine`, `format`, `cli`, `providers`, `shared` — run a `build.md` fully locally, no cloud dependency. |
-| **Commercial** | Proprietary | `sync` (real-time collab), `web` (editor), `apps/server` (hosting, auth, teams). |
+| **Framework** | Apache-2.0 | `engine`, `format`, `cli`, `providers`, `shared`, `agents` — run a `build.md` fully locally, no server or database. Free for any use, including commercial. |
+| **Server & collaboration** | AGPL-3.0 | `sync` (real-time collab), `web` (editor), `apps/server` (API, snapshots, and Phase 2.4 auth/teams). Free to self-host and modify under the AGPL. |
+| **Commercial exception** | by contract | A commercial license for the AGPL parts is available if you can't comply with the AGPL — see [`COMMERCIAL-LICENSE.md`](./COMMERCIAL-LICENSE.md). |
 
-The `build.md` format (`SPEC.md`) is an open standard — your graph is never
-locked in.
+Full details in [`LICENSING.md`](./LICENSING.md). The `build.md` format
+(`SPEC.md`) is an open standard — your graph is never locked in.
 
 ## Monorepo layout
 
@@ -101,10 +102,10 @@ makedown/
 │   ├── providers/          # [OSS] model adapters (Anthropic first) + cost accounting
 │   ├── agents/             # [OSS] coding-agent runner (Claude Agent SDK) for the agent step
 │   ├── cli/                # [OSS] the `md` command
-│   ├── sync/               # [commercial] Yjs CRDT doc model + git backing + WebSocket sync server
-│   └── web/                # [commercial] React collaborative workbench (editor + DAG + inspector)
+│   ├── sync/               # [AGPL-3.0] Yjs CRDT doc model + git backing + WebSocket sync server
+│   └── web/                # [AGPL-3.0] React collaborative workbench (editor + DAG + inspector)
 └── apps/
-    └── server/             # [commercial] Fastify API: build orchestration, SSE, snapshots/branches
+    └── server/             # [AGPL-3.0] Fastify API: build orchestration, SSE, snapshots/branches
 ```
 
 ## Status
@@ -120,17 +121,18 @@ workspace, `transform` scripts run in a locked-down subprocess (or Docker via
 `sandbox: container`) with no ambient filesystem/secrets/network and memory+time
 caps, and `map` fan-out is capped.
 
-**Phase 2 collab core (2.0–2.3) is done** — the commercial collaboration layer:
+**Phase 2 collab core (2.0–2.3) is done** — the AGPL collaboration layer:
 real-time co-editing (Yjs CRDT) of `build.md` + sources, a git-backed snapshot/
 branch model, a Fastify server that drives the engine with streaming build
 progress (SSE) and a human approval gate, and a React **build workbench**
 (collaborative editor + live DAG + artifact/provenance/cost inspector). Remaining:
-Phase 2.4 (auth, RBAC, billing, shared artifact CDN). Engine = TypeScript.
+Phase 2.4 (auth, team RBAC, optional Postgres provenance index, `md share`
+published views) — all optional and self-host-first. Engine = TypeScript.
 **323 unit/integration tests** + **5 script tests** + a **2-spec Playwright e2e**
 that drives a real browser against the real server (open → live-edit → build →
 artifact, and two-client sync); engine ~95% / sync ~95% / server ~91% statement
-coverage. The dependency-direction guard (`pnpm lint:deps`) keeps the OSS
-packages free of any commercial import.
+coverage. The dependency-direction guard (`pnpm lint:deps`) keeps the Apache-2.0
+framework packages standalone — they never import the AGPL server/collab packages.
 
 ## Develop
 
@@ -139,7 +141,7 @@ pnpm install
 pnpm build         # build all packages
 pnpm typecheck
 pnpm test
-pnpm lint:deps     # verify the open-core boundary (OSS never imports commercial)
+pnpm lint:deps     # verify the framework stays standalone (Apache-2.0 pkgs never import the AGPL server/collab pkgs)
 ```
 
 ## Run the collaborative app (Phase 2)
@@ -197,5 +199,11 @@ pnpm --filter @makedown/web e2e           # boots server + web, runs the specs
 
 ## License
 
-OSS packages: Apache-2.0 (see [`LICENSE`](./LICENSE)). Commercial packages carry
-their own `LICENSE` and are not Apache-2.0.
+Makedown is **dual-licensed** — see [`LICENSING.md`](./LICENSING.md):
+
+- **Framework** (`engine`, `format`, `cli`, `providers`, `shared`, `agents`):
+  **Apache-2.0** (root [`LICENSE`](./LICENSE)). Free for any use, incl. commercial.
+- **Server & collaboration** (`apps/server`, `packages/sync`, `packages/web`):
+  **AGPL-3.0** (each carries its own `LICENSE`). Free to self-host under the AGPL.
+- A **commercial license** for the AGPL parts is available by contract — see
+  [`COMMERCIAL-LICENSE.md`](./COMMERCIAL-LICENSE.md).
