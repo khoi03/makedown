@@ -125,14 +125,31 @@ caps, and `map` fan-out is capped.
 real-time co-editing (Yjs CRDT) of `build.md` + sources, a git-backed snapshot/
 branch model, a Fastify server that drives the engine with streaming build
 progress (SSE) and a human approval gate, and a React **build workbench**
-(collaborative editor + live DAG + artifact/provenance/cost inspector). Remaining:
-Phase 2.4 (auth, team RBAC, optional Postgres provenance index, `md share`
-published views) — all optional and self-host-first. Engine = TypeScript.
-**323 unit/integration tests** + **5 script tests** + a **2-spec Playwright e2e**
-that drives a real browser against the real server (open → live-edit → build →
-artifact, and two-client sync); engine ~95% / sync ~95% / server ~91% statement
-coverage. The dependency-direction guard (`pnpm lint:deps`) keeps the Apache-2.0
-framework packages standalone — they never import the AGPL server/collab packages.
+(collaborative editor + live DAG + artifact/provenance/cost inspector).
+
+**Phase 2.4a (tenancy foundation) is done** — **optional, self-host-first**
+multi-tenancy that is entirely inert unless you set `DATABASE_URL`:
+
+- **Auth** — email/password accounts with scrypt-hashed credentials and
+  HttpOnly-cookie sessions (CSPRNG tokens stored only as a hash). Built on Node's
+  standard `crypto` (no homemade cryptography, no external auth vendor). Login +
+  signup are rate-limited.
+- **Team RBAC** — orgs/teams with `owner › admin › member › viewer` roles; every
+  workspace and build route is authorized by the caller's role.
+- **Postgres provenance index** — a queryable, denormalized projection of build
+  provenance, **dual-written** alongside the canonical per-workspace CAS (the
+  engine still writes the CAS unchanged; the index is always re-derivable). Drizzle
+  ORM, verified in CI against an in-process Postgres (pglite).
+- **Single-tenant by default** — with no `DATABASE_URL` the server runs exactly as
+  before: no login, no database, every existing test green.
+
+Remaining: **Phase 2.4b** (`md share` published read-only artifact views).
+Engine = TypeScript. **398 unit/integration tests** + **5 script tests** + a
+**2-spec Playwright e2e** that drives a real browser against the real server
+(open → live-edit → build → artifact, and two-client sync); engine ~95% /
+sync ~95% / server ~90% statement coverage. The dependency-direction guard
+(`pnpm lint:deps`) keeps the Apache-2.0 framework packages standalone — they
+never import the AGPL server/collab packages.
 
 ## Develop
 
@@ -180,9 +197,42 @@ click a node to inspect its **artifact / provenance / cost**; **Snapshot** commi
 the current state to git; the branch chip switches/creates branches. An `agent`
 target with `approval: required` pops an approval modal showing its diff.
 
-> **Security:** the server has no auth yet (Phase 2.4). Run it locally or on a
-> trusted network only — build endpoints execute workspace code (sandboxed per
-> Phase 1.5). Don't expose it publicly until 2.4 adds auth + RBAC.
+> **Security:** with no `DATABASE_URL` the server is **single-tenant and has no
+> auth** — run it locally or on a trusted network only (build endpoints execute
+> workspace code, sandboxed per Phase 1.5). To expose it to a team, enable auth +
+> RBAC below.
+
+### Run with teams (auth + RBAC + provenance index)
+
+Set `DATABASE_URL` to a Postgres instance and the server switches on accounts,
+org/team RBAC, and the provenance index. Everything else is unchanged.
+
+```bash
+# 1) a Postgres database (local docker shown; Neon/Supabase/RDS URLs work too)
+docker run -d --name makedown-pg -e POSTGRES_PASSWORD=dev -p 5432:5432 postgres:16
+
+# 2) start the server with auth enabled (schema auto-migrates on boot)
+$env:DATABASE_URL = "postgres://postgres:dev@localhost:5432/postgres"
+$env:MAKEDOWN_WORKSPACES_ROOT = "$pwd/examples"
+$env:MAKEDOWN_SECURE_COOKIES = "1"   # set when serving over HTTPS (omit for local http)
+node apps/server/dist/main.js
+# → ... (workspaces: .../examples, auth: on)
+```
+
+Then in the web app: **create an account** (you get a personal org as `owner`).
+A new account starts with no workspaces — on the landing screen an **"Add to
+&lt;your org&gt;"** section lists the unclaimed `build.md` workspaces found under
+the server's root; click **+ Add** to bring one into your org, then open it.
+Teammates added to the org with a role then share it: a `viewer` can read the
+graph/artifacts; a `member` can build/snapshot/branch; an `admin` can manage
+members; the `owner` can delete the org. Each build's provenance is mirrored into
+Postgres for cross-workspace cost/usage queries — while the canonical record
+stays in the workspace's CAS.
+
+> Auth uses standard primitives but is a young surface: put a rate-limiting
+> reverse proxy / WAF in front of a public deployment (the app has a basic
+> in-process limiter), and serve over HTTPS so `MAKEDOWN_SECURE_COOKIES=1`
+> applies.
 
 ### End-to-end test (real browser ↔ real server)
 
