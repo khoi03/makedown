@@ -24,6 +24,17 @@ import {
 } from "./workspace.js";
 import { BuildManager } from "./builds.js";
 import { getGraph, getArtifact, getProvenance, getCost } from "./artifacts.js";
+import { collectProvenanceRows } from "./provenance-index.js";
+import { registerAuthRoutes } from "./auth-routes.js";
+import { NullTenancy, type TenancyProvider, type Principal, type Action } from "./tenancy/index.js";
+import { SESSION_COOKIE, parseCookie } from "./tenancy/cookies.js";
+
+declare module "fastify" {
+  interface FastifyRequest {
+    /** The authenticated caller, set by the session preHandler (undefined when off). */
+    user?: Principal;
+  }
+}
 
 export interface ApiDeps {
   readonly store: WorkspaceStore;
@@ -38,6 +49,10 @@ export interface ApiDeps {
   readonly author?: GitAuthor;
   /** Fastify logger toggle. */
   readonly logger?: boolean;
+  /** Tenancy provider. Defaults to the permissive single-tenant NullTenancy. */
+  readonly tenancy?: TenancyProvider;
+  /** Set the Secure attribute on the session cookie (HTTPS deployments). */
+  readonly secureCookies?: boolean;
 }
 
 interface IdParams {
@@ -47,6 +62,56 @@ interface IdParams {
 export function buildApi(deps: ApiDeps): FastifyInstance {
   const app = Fastify({ logger: deps.logger ?? false });
   const contextFactory = deps.contextFactory ?? makeServerContext;
+  const tenancy = deps.tenancy ?? new NullTenancy();
+
+  app.decorateRequest("user", undefined);
+
+  // Resolve the session cookie to a principal on every request. A no-op under
+  // NullTenancy (authenticate always returns undefined), so single-tenant
+  // behavior is unchanged.
+  app.addHook("preHandler", async (req) => {
+    if (!tenancy.enabled) return;
+    const token = parseCookie(req.headers.cookie, SESSION_COOKIE);
+    req.user = await tenancy.authenticate(token);
+  });
+
+  /**
+   * Enforce that the caller may perform `action` on `workspaceId`. Returns true
+   * when allowed; otherwise writes a 401/403 and returns false. Always allows
+   * when tenancy is disabled (single-tenant mode).
+   */
+  async function ensureAuthorized(
+    req: FastifyRequest,
+    reply: FastifyReply,
+    workspaceId: string,
+    action: Action,
+  ): Promise<boolean> {
+    if (!tenancy.enabled) return true;
+    if (!req.user) {
+      reply.code(401).send({ error: "Authentication required" });
+      return false;
+    }
+    if (!(await tenancy.authorize(req.user.userId, workspaceId, action))) {
+      reply.code(403).send({ error: "You do not have access to this workspace" });
+      return false;
+    }
+    return true;
+  }
+
+  /** Authorize a job-scoped route by the job's owning workspace. */
+  async function ensureJobAccess(
+    req: FastifyRequest,
+    reply: FastifyReply,
+    jobId: string,
+    action: Action,
+  ): Promise<boolean> {
+    const job = deps.manager.get(jobId);
+    if (!job) {
+      reply.code(404).send({ error: "Unknown build job" });
+      return false;
+    }
+    return ensureAuthorized(req, reply, job.workspaceId, action);
+  }
 
   // Treat an empty JSON body as "no body" instead of erroring, so bodyless
   // POSTs (e.g. starting a build) succeed regardless of how the client sets the
@@ -86,15 +151,62 @@ export function buildApi(deps: ApiDeps): FastifyInstance {
 
   app.get("/api/health", async () => ({ ok: true }));
 
-  app.get("/api/workspaces", async () => ({ workspaces: await deps.store.list() }));
+  registerAuthRoutes(app, { tenancy, secureCookies: deps.secureCookies ?? false });
 
-  app.get<{ Params: IdParams }>("/api/workspaces/:id/graph", async (req) => {
+  app.get("/api/workspaces", async (req, reply) => {
+    const all = await deps.store.list();
+    if (!tenancy.enabled) return { workspaces: all };
+    if (!req.user) return reply.code(401).send({ error: "Authentication required" });
+    // Intersect the on-disk workspaces with the ones this user can access.
+    const accessible = await tenancy.accessibleWorkspaceIds(req.user.userId);
+    const workspaces = accessible ? all.filter((id) => accessible.has(id)) : all;
+    return { workspaces };
+  });
+
+  // On-disk workspaces not yet claimed by any org — what a signed-in user can
+  // add to their org. Empty in single-tenant mode.
+  app.get("/api/workspaces/available", async (req, reply) => {
+    if (!tenancy.enabled) return { workspaces: [] };
+    if (!req.user) return reply.code(401).send({ error: "Authentication required" });
+    const all = await deps.store.list();
+    return { workspaces: await tenancy.unregisteredWorkspaceIds(all) };
+  });
+
+  app.get("/api/orgs", async (req, reply) => {
+    if (!tenancy.enabled) return { orgs: [] };
+    if (!req.user) return reply.code(401).send({ error: "Authentication required" });
+    return { orgs: await tenancy.listOrgs(req.user.userId) };
+  });
+
+  // Register an existing on-disk workspace under an org so its members can access
+  // it. Authorization (must be able to create workspaces in the org) is enforced
+  // inside the provider.
+  app.post<{ Params: { orgId: string }; Body: { workspaceId?: string } }>(
+    "/api/orgs/:orgId/workspaces",
+    async (req, reply) => {
+      if (!tenancy.enabled) return reply.code(404).send({ error: "Authentication is disabled" });
+      if (!req.user) return reply.code(401).send({ error: "Authentication required" });
+      const workspaceId = req.body?.workspaceId?.trim();
+      if (!workspaceId) return reply.code(400).send({ error: "workspaceId is required" });
+      await deps.store.open(workspaceId); // 404/400 if the dir is missing or unsafe
+      try {
+        await tenancy.registerWorkspace(req.user.userId, req.params.orgId, workspaceId);
+      } catch {
+        return reply.code(403).send({ error: "Could not register workspace" });
+      }
+      return reply.code(201).send({ workspaceId, orgId: req.params.orgId });
+    },
+  );
+
+  app.get<{ Params: IdParams }>("/api/workspaces/:id/graph", async (req, reply) => {
+    if (!(await ensureAuthorized(req, reply, req.params.id, "workspace:read"))) return reply;
     const dir = await deps.store.open(req.params.id);
     await deps.flushWorkspace?.(req.params.id);
     return getGraph(dir);
   });
 
-  app.get<{ Params: IdParams }>("/api/workspaces/:id/cost", async (req) => {
+  app.get<{ Params: IdParams }>("/api/workspaces/:id/cost", async (req, reply) => {
+    if (!(await ensureAuthorized(req, reply, req.params.id, "workspace:read"))) return reply;
     const dir = await deps.store.open(req.params.id);
     await deps.flushWorkspace?.(req.params.id);
     return getCost(dir);
@@ -102,6 +214,7 @@ export function buildApi(deps: ApiDeps): FastifyInstance {
 
   app.post<{ Params: IdParams }>("/api/workspaces/:id/build", async (req, reply) => {
     const id = req.params.id;
+    if (!(await ensureAuthorized(req, reply, id, "workspace:build"))) return reply;
     const dir = await deps.store.open(id);
     await deps.flushWorkspace?.(id);
     const doc = await loadDoc(dir);
@@ -109,24 +222,31 @@ export function buildApi(deps: ApiDeps): FastifyInstance {
       workspaceId: id,
       doc,
       makeContext: (hooks) => contextFactory(dir, hooks),
+      // Dual-write provenance for the built targets into the tenancy index
+      // (no-op under NullTenancy). The CAS remains the canonical source.
+      onResult: async (settled) => {
+        const built = settled.result?.built ?? [];
+        if (built.length === 0) return;
+        const rows = await collectProvenanceRows(dir, id, built);
+        await tenancy.recordProvenance(id, rows);
+      },
     });
     return reply.code(202).send({ jobId: job.id });
   });
 
-  app.get<{ Params: IdParams }>("/api/workspaces/:id/builds", async (req) => {
+  app.get<{ Params: IdParams }>("/api/workspaces/:id/builds", async (req, reply) => {
+    if (!(await ensureAuthorized(req, reply, req.params.id, "workspace:read"))) return reply;
     await deps.store.open(req.params.id);
     return { builds: deps.manager.list(req.params.id) };
   });
 
   app.get<{ Params: { jobId: string } }>("/api/builds/:jobId", async (req, reply) => {
-    const job = deps.manager.get(req.params.jobId);
-    if (!job) return reply.code(404).send({ error: "Unknown build job" });
-    return job;
+    if (!(await ensureJobAccess(req, reply, req.params.jobId, "workspace:read"))) return reply;
+    return deps.manager.get(req.params.jobId);
   });
 
-  app.get<{ Params: { jobId: string } }>("/api/builds/:jobId/events", (req, reply) => {
-    const job = deps.manager.get(req.params.jobId);
-    if (!job) return reply.code(404).send({ error: "Unknown build job" });
+  app.get<{ Params: { jobId: string } }>("/api/builds/:jobId/events", async (req, reply) => {
+    if (!(await ensureJobAccess(req, reply, req.params.jobId, "workspace:read"))) return reply;
 
     reply.raw.writeHead(200, {
       "content-type": "text/event-stream",
@@ -145,6 +265,7 @@ export function buildApi(deps: ApiDeps): FastifyInstance {
   app.post<{ Params: { jobId: string; approvalId: string }; Body: { approved?: boolean } }>(
     "/api/builds/:jobId/approvals/:approvalId",
     async (req, reply) => {
+      if (!(await ensureJobAccess(req, reply, req.params.jobId, "approval:resolve"))) return reply;
       const ok = deps.manager.resolveApproval(req.params.approvalId, req.body?.approved === true);
       if (!ok) return reply.code(404).send({ error: "Unknown or already-resolved approval" });
       return { resolved: true };
@@ -154,6 +275,7 @@ export function buildApi(deps: ApiDeps): FastifyInstance {
   app.get<{ Params: { id: string; target: string } }>(
     "/api/workspaces/:id/artifacts/:target",
     async (req, reply) => {
+      if (!(await ensureAuthorized(req, reply, req.params.id, "workspace:read"))) return reply;
       const dir = await deps.store.open(req.params.id);
       const artifact = await getArtifact(dir, req.params.target);
       if (!artifact) return reply.code(404).send({ error: "Artifact not built" });
@@ -164,6 +286,7 @@ export function buildApi(deps: ApiDeps): FastifyInstance {
   app.get<{ Params: { id: string; target: string } }>(
     "/api/workspaces/:id/artifacts/:target/why",
     async (req, reply) => {
+      if (!(await ensureAuthorized(req, reply, req.params.id, "workspace:read"))) return reply;
       const dir = await deps.store.open(req.params.id);
       const provenance = await getProvenance(dir, req.params.target);
       if (!provenance) return reply.code(404).send({ error: "Artifact not built" });
@@ -171,7 +294,8 @@ export function buildApi(deps: ApiDeps): FastifyInstance {
     },
   );
 
-  app.get<{ Params: IdParams }>("/api/workspaces/:id/snapshots", async (req) => {
+  app.get<{ Params: IdParams }>("/api/workspaces/:id/snapshots", async (req, reply) => {
+    if (!(await ensureAuthorized(req, reply, req.params.id, "workspace:read"))) return reply;
     const dir = await deps.store.open(req.params.id);
     return { snapshots: await listSnapshots(dir) };
   });
@@ -179,6 +303,7 @@ export function buildApi(deps: ApiDeps): FastifyInstance {
   app.post<{ Params: IdParams; Body: { message?: string } }>(
     "/api/workspaces/:id/snapshots",
     async (req, reply) => {
+      if (!(await ensureAuthorized(req, reply, req.params.id, "workspace:snapshot"))) return reply;
       const dir = await deps.store.open(req.params.id);
       const message = req.body?.message?.trim();
       if (!message) return reply.code(400).send({ error: "A snapshot message is required" });
@@ -189,7 +314,8 @@ export function buildApi(deps: ApiDeps): FastifyInstance {
     },
   );
 
-  app.get<{ Params: IdParams }>("/api/workspaces/:id/branches", async (req) => {
+  app.get<{ Params: IdParams }>("/api/workspaces/:id/branches", async (req, reply) => {
+    if (!(await ensureAuthorized(req, reply, req.params.id, "workspace:read"))) return reply;
     const dir = await deps.store.open(req.params.id);
     return { current: await currentBranch(dir), branches: await listBranches(dir) };
   });
@@ -197,6 +323,7 @@ export function buildApi(deps: ApiDeps): FastifyInstance {
   app.post<{ Params: IdParams; Body: { name?: string; create?: boolean } }>(
     "/api/workspaces/:id/branches",
     async (req, reply) => {
+      if (!(await ensureAuthorized(req, reply, req.params.id, "workspace:branch"))) return reply;
       const dir = await deps.store.open(req.params.id);
       const name = req.body?.name?.trim();
       if (!name) return reply.code(400).send({ error: "A branch name is required" });

@@ -21,6 +21,7 @@ import {
 import { WorkspaceStore } from "./workspace.js";
 import { BuildManager } from "./builds.js";
 import { buildApi } from "./api.js";
+import { NullTenancy, createPostgresTenancy, type TenancyProvider } from "./tenancy/index.js";
 
 export interface ServerOptions {
   readonly workspacesRoot: string;
@@ -30,6 +31,10 @@ export interface ServerOptions {
   readonly logger?: boolean;
   /** Auto-deny an approval after this many ms. Default: 10 minutes. */
   readonly approvalTimeoutMs?: number;
+  /** Tenancy provider (auth/RBAC). Defaults to single-tenant NullTenancy. */
+  readonly tenancy?: TenancyProvider;
+  /** Set Secure on the session cookie (HTTPS deployments). */
+  readonly secureCookies?: boolean;
 }
 
 const DEFAULT_APPROVAL_TIMEOUT_MS = 10 * 60 * 1000;
@@ -100,6 +105,8 @@ export function createServer(opts: ServerOptions): AssembledServer {
     manager,
     author: opts.author,
     logger: opts.logger,
+    tenancy: opts.tenancy ?? new NullTenancy(),
+    secureCookies: opts.secureCookies,
     flushWorkspace: async (id) => {
       await persistences.get(id)?.flush();
     },
@@ -155,9 +162,21 @@ export async function start(opts: ServerOptions): Promise<RunningServer> {
 async function main(): Promise<void> {
   const workspacesRoot = process.env["MAKEDOWN_WORKSPACES_ROOT"] ?? process.cwd();
   const port = Number(process.env["PORT"] ?? 4000);
-  const server = await start({ workspacesRoot, port, logger: true });
+
+  // Auth/RBAC is opt-in: set DATABASE_URL to a Postgres instance to enable it.
+  // Without it the server runs single-tenant (no login), exactly as before.
+  const databaseUrl = process.env["DATABASE_URL"];
+  const secureCookies = process.env["MAKEDOWN_SECURE_COOKIES"] === "1";
+  let tenancy: TenancyProvider = new NullTenancy();
+  if (databaseUrl) {
+    tenancy = (await createPostgresTenancy(databaseUrl)).tenancy;
+  }
+
+  const server = await start({ workspacesRoot, port, logger: true, tenancy, secureCookies });
   // eslint-disable-next-line no-console
-  console.log(`Makedown server listening on ${server.url} (workspaces: ${workspacesRoot})`);
+  console.log(
+    `Makedown server listening on ${server.url} (workspaces: ${workspacesRoot}, auth: ${tenancy.enabled ? "on" : "off"})`,
+  );
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

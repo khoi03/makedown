@@ -62,6 +62,12 @@ export interface StartBuildOptions {
   readonly doc: BuildDoc;
   /** Build a {@link BuildContext} wired with the manager's hooks. */
   readonly makeContext: (hooks: ContextHooks) => BuildContext;
+  /**
+   * Called once the build settles (success or failure). Best-effort and awaited
+   * as part of the job's completion — used for the provenance dual-write. Errors
+   * are swallowed so an index write can never fail the build itself.
+   */
+  readonly onResult?: (job: BuildJob) => void | Promise<void>;
 }
 
 export interface BuildManagerOptions {
@@ -182,6 +188,13 @@ export class BuildManager {
     } finally {
       job.finishedAt = new Date().toISOString();
       this.cleanupApprovals(job.id);
+    }
+    if (opts.onResult) {
+      try {
+        await opts.onResult(job);
+      } catch {
+        // Best-effort (e.g. the provenance dual-write): never fail a build on it.
+      }
     }
     return job;
   }
