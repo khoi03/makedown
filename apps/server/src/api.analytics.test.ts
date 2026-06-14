@@ -156,6 +156,44 @@ describe("analytics read-API (tenancy enabled)", () => {
   });
 });
 
+describe("analytics read-API rate limiting", () => {
+  let root: string;
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "mdanalytics-rl-"));
+    app = buildApi({
+      store: new WorkspaceStore(root),
+      manager: new BuildManager(),
+      tenancy: new TenancyService(new InMemoryTenancyStore()),
+      contextFactory: fakeContext,
+      analyticsRateLimit: { max: 1, windowMs: 60_000 },
+    });
+    await app.ready();
+  });
+  afterEach(async () => {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it("returns 429 once the per-IP analytics request limit is exceeded", async () => {
+    const owner = await app.inject({
+      method: "POST",
+      url: "/api/auth/signup",
+      payload: { email: "owner@example.com", password: "owner-password" },
+    });
+    const cookie = sessionCookie(owner);
+    const orgId = owner.json().org.id;
+
+    const first = await app.inject({ method: "GET", url: `/api/orgs/${orgId}/analytics`, headers: { cookie } });
+    expect(first.statusCode).toBe(200);
+
+    const second = await app.inject({ method: "GET", url: `/api/orgs/${orgId}/analytics`, headers: { cookie } });
+    expect(second.statusCode).toBe(429);
+    expect(second.headers["retry-after"]).toBeDefined();
+  });
+});
+
 describe("analytics read-API (single-tenant)", () => {
   let root: string;
   let app: FastifyInstance;
