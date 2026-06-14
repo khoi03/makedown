@@ -17,7 +17,7 @@ md graph            # the dependency DAG in execution order
 md render <target>  # the exact system + user prompt a target would send — no tokens spent
 md why <target>     # full provenance: inputs, prompt, model, params, cost, tokens
 md cost             # estimated token/$ upper bound before running (no model calls)
-md share <target>   # read-only shareable artifact link (planned)
+md share <target>   # export a built artifact to a self-contained read-only HTML page
 ```
 
 Each target can set a `system:` prompt (or inherit a workspace default); both the
@@ -143,13 +143,29 @@ multi-tenancy that is entirely inert unless you set `DATABASE_URL`:
 - **Single-tenant by default** — with no `DATABASE_URL` the server runs exactly as
   before: no login, no database, every existing test green.
 
-Remaining: **Phase 2.4b** (`md share` published read-only artifact views).
-Engine = TypeScript. **398 unit/integration tests** + **5 script tests** + a
-**2-spec Playwright e2e** that drives a real browser against the real server
-(open → live-edit → build → artifact, and two-client sync); engine ~95% /
-sync ~95% / server ~90% statement coverage. The dependency-direction guard
-(`pnpm lint:deps`) keeps the Apache-2.0 framework packages standalone — they
-never import the AGPL server/collab packages.
+**Phase 2.4b (sharing) is done** — read-only published views of compiled
+artifacts, in two complementary forms:
+
+- **`md share <target>`** (CLI, standalone) — exports a built artifact to a
+  **self-contained HTML file** you can host anywhere. No server, no database, no
+  token; the artifact is rendered as escaped text (`--provenance` to include it).
+- **Hosted share links** (server + web) — a "Share" button in the artifact
+  inspector mints an unguessable, revocable, optionally-expiring link served at a
+  public `/s/:token` route. The token is stored only as a hash; the public page is
+  Markdown rendered through a strict sanitizer (no scripts/handlers/`javascript:`
+  URLs), hardened with a tight CSP, a uniform 404 (no expired/revoked oracle), and
+  per-IP rate limiting. Provenance is **opt-in per link**. Works in both single-
+  tenant (durable file-backed registry) and team mode (Postgres, `share:create`
+  RBAC), with an object-store/CDN seam for later.
+
+Remaining: optional later hardening (session cache, admin-assigned workspace
+registration, agent-in-container). Engine = TypeScript. **442 unit/integration
+tests** + **5 script tests** + a **3-spec Playwright e2e** that drives a real
+browser against the real server (open → live-edit → build → artifact, two-client
+sync, and share → public view → revoke); engine ~95% / sync ~95% / server ~90%
+statement coverage. The dependency-direction guard (`pnpm lint:deps`) keeps the
+Apache-2.0 framework packages standalone — they never import the AGPL
+server/collab packages.
 
 ## Develop
 
@@ -233,6 +249,31 @@ stays in the workspace's CAS.
 > reverse proxy / WAF in front of a public deployment (the app has a basic
 > in-process limiter), and serve over HTTPS so `MAKEDOWN_SECURE_COOKIES=1`
 > applies.
+
+### Share a compiled artifact
+
+Two ways, depending on whether you want a file or a live link:
+
+```bash
+# A) Standalone export — a self-contained HTML file, no server needed.
+md build examples/phase1
+md share summary examples/phase1                 # → artifacts/summary.md.share.html
+md share summary examples/phase1 --provenance    # include model/inputs/cost
+md share summary examples/phase1 -o /tmp/out.html
+```
+
+```text
+B) Hosted link — in the web workbench, open a built target, and in the
+   Artifact tab click "Create link". Copy the one-time URL (it opens at
+   /s/<token> with no sign-in). Tick "Include provenance" to publish the
+   model/inputs/cost too, and "Revoke" any link to kill it instantly.
+```
+
+Hosted links are durable with no database (a file-backed registry under the
+workspaces root); with `DATABASE_URL` set they live in Postgres and require the
+`share:create` role (`member`+). The public page renders Markdown through a strict
+sanitizer behind a tight CSP — but treat any link as public-to-the-world, and only
+share artifacts whose contents (and, if included, provenance) are safe to expose.
 
 ### End-to-end test (real browser ↔ real server)
 
