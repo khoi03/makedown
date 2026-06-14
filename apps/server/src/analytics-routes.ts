@@ -56,10 +56,7 @@ function parseRange(query: RangeQuery): AnalyticsRange | "invalid" {
   if (from === "invalid") return "invalid";
   const to = normalizeDate(query.to);
   if (to === "invalid") return "invalid";
-  const range: AnalyticsRange = {};
-  if (from) (range as { from?: string }).from = from;
-  if (to) (range as { to?: string }).to = to;
-  return range;
+  return { ...(from ? { from } : {}), ...(to ? { to } : {}) };
 }
 
 /** Returns the canonical ISO string, `undefined` if absent, or `"invalid"`. */
