@@ -145,12 +145,21 @@ unconfigured provider in the chain is skipped too. It stops immediately on a
 since another model won't help. If the whole chain fails, the build errors with
 a summary of every attempt.
 
+`fallback` and `route` may also be set under front-matter `defaults:` to apply to
+every target that doesn't declare its own (like `defaults.model`); a target's own
+values win.
+
 `route` orders the candidates:
 
 | `route` | Behavior |
 |---|---|
 | `strict` (default) | Primary first, then fallbacks in declared order. |
 | `cost-aware` | Primary still first; the **fallback** alternatives are reordered cheapest-first (by a blended token price; unpriced models last). |
+
+Cost-aware ordering prices Anthropic models from the built-in table (matching
+gateway/Bedrock prefixes and `-YYYYMMDD` snapshot suffixes) and common OpenAI
+models from a public list-price table used **for ordering only**. A model with no
+known price is simply ordered last — never assigned a fabricated cost.
 
 **Determinism & provenance (important).** The identity hash folds in the *whole
 spec* — `model` + `fallback` + `route` — but **never** the model that actually
