@@ -15,6 +15,7 @@ import type {
   AuthResult,
   ProvenanceInput,
 } from "./provider.js";
+import type { AnalyticsRange, AnalyticsSummary } from "./analytics.js";
 
 const MIN_PASSWORD_LENGTH = 8;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -92,6 +93,11 @@ export class TenancyService implements TenancyProvider {
     return role ? can(role, action) : false;
   }
 
+  async authorizeOrg(userId: string, orgId: string, action: Action): Promise<boolean> {
+    const membership = await this.store.findMembership(orgId, userId);
+    return membership ? can(membership.role, action) : false;
+  }
+
   async accessibleWorkspaceIds(userId: string): Promise<Set<string>> {
     const orgs = await this.store.listOrgsForUser(userId);
     const ids = new Set<string>();
@@ -151,6 +157,15 @@ export class TenancyService implements TenancyProvider {
   /** Read the provenance index for a workspace (powers cost/usage views). */
   async listProvenance(workspaceId: string): Promise<ProvenanceRow[]> {
     return this.store.listProvenanceForWorkspace(workspaceId);
+  }
+
+  async analytics(orgId: string, range?: AnalyticsRange): Promise<AnalyticsSummary> {
+    const breakdowns = await this.store.aggregateProvenanceForOrg(orgId, range);
+    return {
+      orgId,
+      range: { from: range?.from ?? null, to: range?.to ?? null },
+      ...breakdowns,
+    };
   }
 
   private async roleFor(userId: string, workspaceId: string): Promise<Role | undefined> {

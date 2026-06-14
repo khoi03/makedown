@@ -11,6 +11,7 @@
  */
 import type { Action } from "./rbac.js";
 import type { Org, ProvenanceRow } from "./types.js";
+import type { AnalyticsRange, AnalyticsSummary } from "./analytics.js";
 
 /** The authenticated caller resolved from a session token. */
 export interface Principal {
@@ -39,6 +40,13 @@ export interface TenancyProvider {
 
   /** Whether `userId` may perform `action` on `workspaceId`. */
   authorize(userId: string, workspaceId: string, action: Action): Promise<boolean>;
+
+  /**
+   * Whether `userId` may perform `action` directly on org `orgId` (org-scoped,
+   * not via a workspace). Powers the cross-workspace analytics surface. Always
+   * true when tenancy is disabled.
+   */
+  authorizeOrg(userId: string, orgId: string, action: Action): Promise<boolean>;
 
   /**
    * The set of workspace ids `userId` can see, or `undefined` for "unrestricted"
@@ -74,4 +82,11 @@ export interface TenancyProvider {
 
   /** Index provenance rows for a workspace (no-op when tenancy is disabled). */
   recordProvenance(workspaceId: string, rows: readonly ProvenanceInput[]): Promise<void>;
+
+  /**
+   * Cost/usage analytics over an org's provenance index within an optional time
+   * window. Returns `undefined` when tenancy is disabled (no index → the
+   * dashboard renders a graceful single-tenant empty state).
+   */
+  analytics(orgId: string, range?: AnalyticsRange): Promise<AnalyticsSummary | undefined>;
 }
