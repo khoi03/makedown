@@ -31,6 +31,12 @@ membership (`analytics:read`, viewer+) is required, so one org can never read
 another's spend. With **no `DATABASE_URL`** the route returns `{ enabled: false }`
 (no index, no auth wall) so the dashboard can render a graceful empty state.
 
+The endpoint is **rate-limited per client IP** (default 60/min) — checked before
+auth/DB work, returning `429` with a `Retry-After` header so a flood can't reach
+the index. Tune it at runtime with **`MAKEDOWN_ANALYTICS_RATE_LIMIT`** (max
+requests per minute; invalid/blank → the 60/min default), or programmatically via
+`ApiDeps.analyticsRateLimit`.
+
 Semantics: the index is keyed by `(workspace, identity-hash)` and upserted, so
 figures measure **distinct artifact production** cost — cache-hit / no-op
 rebuilds do not re-accrue. The index never contains the resolved prompt/params

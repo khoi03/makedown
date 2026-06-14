@@ -8,9 +8,28 @@ import { WebSocket } from "ws";
 import * as Y from "yjs";
 import { Awareness } from "y-protocols/awareness";
 import { encodeSyncStep1, readMessage, type SyncConnection } from "@makedown/sync";
-import { start, type RunningServer } from "./main.js";
+import { start, parseRateLimitPerMinute, type RunningServer } from "./main.js";
 
 const exec = promisify(execFile);
+
+describe("parseRateLimitPerMinute", () => {
+  it("returns undefined when unset or blank (route default applies)", () => {
+    expect(parseRateLimitPerMinute(undefined)).toBeUndefined();
+    expect(parseRateLimitPerMinute("")).toBeUndefined();
+    expect(parseRateLimitPerMinute("   ")).toBeUndefined();
+  });
+
+  it("parses a positive integer as max-per-minute", () => {
+    expect(parseRateLimitPerMinute("120")).toEqual({ max: 120, windowMs: 60_000 });
+    expect(parseRateLimitPerMinute("60.9")).toEqual({ max: 60, windowMs: 60_000 });
+  });
+
+  it("ignores non-positive or non-numeric values (falls back to the default)", () => {
+    expect(parseRateLimitPerMinute("0")).toBeUndefined();
+    expect(parseRateLimitPerMinute("-5")).toBeUndefined();
+    expect(parseRateLimitPerMinute("abc")).toBeUndefined();
+  });
+});
 
 describe("server end-to-end", () => {
   let root: string;

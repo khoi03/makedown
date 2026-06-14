@@ -11,9 +11,19 @@
  */
 import type { FastifyInstance } from "fastify";
 import type { TenancyProvider, AnalyticsRange } from "./tenancy/index.js";
+import { FixedWindowLimiter } from "./tenancy/rate-limit.js";
+
+/**
+ * Per-IP throttle for the analytics read endpoint. Reads are cheaper than auth,
+ * but each fans out into several indexed `GROUP BY` scans, so a generous-but-real
+ * cap keeps one client from hammering the index. Override via `rateLimit`.
+ */
+const ANALYTICS_MAX_REQUESTS = 60;
+const ANALYTICS_WINDOW_MS = 60 * 1000;
 
 export interface AnalyticsRoutesDeps {
   readonly tenancy: TenancyProvider;
+  readonly rateLimit?: { readonly max: number; readonly windowMs: number };
 }
 
 interface RangeQuery {
@@ -23,10 +33,19 @@ interface RangeQuery {
 
 export function registerAnalyticsRoutes(app: FastifyInstance, deps: AnalyticsRoutesDeps): void {
   const { tenancy } = deps;
+  const windowMs = deps.rateLimit?.windowMs ?? ANALYTICS_WINDOW_MS;
+  const limiter = new FixedWindowLimiter({ max: deps.rateLimit?.max ?? ANALYTICS_MAX_REQUESTS, windowMs });
 
   app.get<{ Params: { orgId: string }; Querystring: RangeQuery }>(
     "/api/orgs/:orgId/analytics",
     async (req, reply) => {
+      // Throttle per client IP before any work — protects the index from a flood
+      // (and an unauthenticated client from spamming even the empty-state probe).
+      if (!limiter.allow(req.ip)) {
+        reply.header("retry-after", Math.ceil(windowMs / 1000));
+        return reply.code(429).send({ error: "Too many requests" });
+      }
+
       // Single-tenant: no index, no auth wall — signal the empty state.
       if (!tenancy.enabled) return { enabled: false };
 
