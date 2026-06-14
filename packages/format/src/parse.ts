@@ -72,6 +72,8 @@ function normalizeFrontMatter(frontMatterText?: string): FrontMatter {
     defaults: raw.defaults
       ? {
           model: raw.defaults.model,
+          fallback: raw.defaults.fallback,
+          route: raw.defaults.route,
           system: raw.defaults.system,
           params: raw.defaults.params,
           cache: raw.defaults.cache ? parseCachePolicy(raw.defaults.cache) : undefined,
@@ -167,8 +169,8 @@ function mergeDefaults(name: string, raw: RawRecipeHeader, fm: FrontMatter): Rec
     inputs: raw.inputs,
     step: raw.step,
     model: raw.model ?? fm.defaults?.model,
-    fallback: raw.fallback,
-    route: raw.route,
+    fallback: raw.fallback ?? fm.defaults?.fallback,
+    route: raw.route ?? fm.defaults?.route,
     system: raw.system ?? fm.defaults?.system,
     params: { ...(fm.defaults?.params ?? {}), ...raw.params },
     output: raw.output ?? `${fm.artifactsDir}/${name}.md`,

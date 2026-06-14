@@ -38,6 +38,8 @@ export const frontMatterSchema = z
     defaults: z
       .object({
         model: z.string().optional(),
+        fallback: z.array(z.string()).optional(),
+        route: routeSchema.optional(),
         system: z.string().optional(),
         params: z.record(z.unknown()).optional(),
         cache: z.string().optional(),

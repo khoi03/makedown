@@ -66,6 +66,8 @@ export interface FrontMatter {
   readonly version?: string;
   readonly defaults?: {
     readonly model?: string;
+    readonly fallback?: readonly string[];
+    readonly route?: RoutePolicy;
     readonly system?: string;
     readonly params?: Readonly<Record<string, unknown>>;
     readonly cache?: CachePolicy;

@@ -94,6 +94,19 @@ describe("parseBuildDoc", () => {
     expect(() => parseBuildDoc(bad)).toThrow(BuildDocParseError);
   });
 
+  it("applies a front-matter default fallback + route to targets that omit their own", () => {
+    const doc = parseBuildDoc(
+      `---\ndefaults:\n  model: anthropic:claude-opus-4-8\n  fallback: [anthropic:claude-sonnet-4-6]\n  route: cost-aware\nartifacts_dir: artifacts\n---\n\n## target: inherits\n\`\`\`yaml\ninputs: []\nstep: chat\n\`\`\`\nHi.\n\n## target: overrides\n\`\`\`yaml\ninputs: []\nstep: chat\nfallback: [openai:gpt-5]\nroute: strict\n\`\`\`\nHi.\n`,
+    );
+    const inherits = doc.targets.find((t) => t.name === "inherits")!.header;
+    expect(inherits.fallback).toEqual(["anthropic:claude-sonnet-4-6"]);
+    expect(inherits.route).toBe("cost-aware");
+
+    const overrides = doc.targets.find((t) => t.name === "overrides")!.header;
+    expect(overrides.fallback).toEqual(["openai:gpt-5"]); // target wins over the default
+    expect(overrides.route).toBe("strict");
+  });
+
   it("round-trips fallback + route through the serializer", () => {
     const doc = parseBuildDoc(
       `## target: t\n\`\`\`yaml\ninputs: []\nstep: chat\nmodel: anthropic:claude-opus-4-8\nfallback: [anthropic:claude-haiku-4-5]\nroute: cost-aware\n\`\`\`\nHi.\n`,

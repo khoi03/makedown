@@ -27,6 +27,9 @@ function serializeFrontMatter(fm: FrontMatter): string | undefined {
   if (fm.defaults) {
     const defaults: Record<string, unknown> = {};
     if (fm.defaults.model) defaults["model"] = fm.defaults.model;
+    if (fm.defaults.fallback && fm.defaults.fallback.length > 0)
+      defaults["fallback"] = fm.defaults.fallback;
+    if (fm.defaults.route) defaults["route"] = fm.defaults.route;
     if (fm.defaults.system) defaults["system"] = fm.defaults.system;
     if (fm.defaults.params) defaults["params"] = fm.defaults.params;
     if (fm.defaults.cache) defaults["cache"] = cachePolicyToString(fm.defaults.cache);
