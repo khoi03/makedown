@@ -246,6 +246,7 @@ docker run -d --name makedown-pg -e POSTGRES_PASSWORD=dev -p 5432:5432 postgres:
 $env:DATABASE_URL = "postgres://postgres:dev@localhost:5432/postgres"
 $env:MAKEDOWN_WORKSPACES_ROOT = "$pwd/examples"
 $env:MAKEDOWN_SECURE_COOKIES = "1"   # set when serving over HTTPS (omit for local http)
+$env:MAKEDOWN_ANALYTICS_RATE_LIMIT = "120"   # optional: analytics reads/min/IP (default 60)
 node apps/server/dist/main.js
 # → ... (workspaces: .../examples, auth: on)
 ```

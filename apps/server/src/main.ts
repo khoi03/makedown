@@ -42,9 +42,26 @@ export interface ServerOptions {
   readonly sharing?: SharingService;
   /** Set Secure on the session cookie (HTTPS deployments). */
   readonly secureCookies?: boolean;
+  /** Override the analytics read rate limit. Defaults to the route's 60/min/IP. */
+  readonly analyticsRateLimit?: { readonly max: number; readonly windowMs: number };
 }
 
 const DEFAULT_APPROVAL_TIMEOUT_MS = 10 * 60 * 1000;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+
+/**
+ * Parse a "max requests per minute" env value into a rate-limit config. Returns
+ * undefined when unset, blank, non-numeric, or non-positive — so the route's own
+ * default applies rather than the server failing to start on a typo.
+ */
+export function parseRateLimitPerMinute(
+  value: string | undefined,
+): { max: number; windowMs: number } | undefined {
+  if (value === undefined || value.trim() === "") return undefined;
+  const max = Number(value);
+  if (!Number.isFinite(max) || max <= 0) return undefined;
+  return { max: Math.floor(max), windowMs: RATE_LIMIT_WINDOW_MS };
+}
 
 export interface AssembledServer {
   readonly app: FastifyInstance;
@@ -118,6 +135,7 @@ export function createServer(opts: ServerOptions): AssembledServer {
     tenancy: opts.tenancy ?? new NullTenancy(),
     sharing,
     secureCookies: opts.secureCookies,
+    analyticsRateLimit: opts.analyticsRateLimit,
     flushWorkspace: async (id) => {
       await persistences.get(id)?.flush();
     },
@@ -178,6 +196,8 @@ async function main(): Promise<void> {
   // Without it the server runs single-tenant (no login), exactly as before.
   const databaseUrl = process.env["DATABASE_URL"];
   const secureCookies = process.env["MAKEDOWN_SECURE_COOKIES"] === "1";
+  // Optional: cap analytics reads per IP per minute (default 60). Invalid → default.
+  const analyticsRateLimit = parseRateLimitPerMinute(process.env["MAKEDOWN_ANALYTICS_RATE_LIMIT"]);
   let tenancy: TenancyProvider = new NullTenancy();
   // Sharing is durable in both modes: Postgres when a database is configured,
   // otherwise a file-backed registry under the workspaces root (the default).
@@ -188,7 +208,15 @@ async function main(): Promise<void> {
     sharing = pg.sharing;
   }
 
-  const server = await start({ workspacesRoot, port, logger: true, tenancy, sharing, secureCookies });
+  const server = await start({
+    workspacesRoot,
+    port,
+    logger: true,
+    tenancy,
+    sharing,
+    secureCookies,
+    analyticsRateLimit,
+  });
   // eslint-disable-next-line no-console
   console.log(
     `Makedown server listening on ${server.url} (workspaces: ${workspacesRoot}, auth: ${tenancy.enabled ? "on" : "off"})`,

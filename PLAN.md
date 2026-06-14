@@ -414,7 +414,7 @@ Running the app by hand surfaced **7 browser↔server integration bugs the unit 
 
 ### Remaining
 1. **Later hardening (optional):** session cache (avoid per-request DB hit); admin-assigned (vs first-come) workspace registration; agent-in-container; a `transform` needing allow-listed `node_modules`; an example demoing `sandbox: container`; the object-store/CDN backing for shared artifacts (seam in place); multi-org analytics roll-up + CSV export; **per-model retry/backoff before advancing the chain; broader OpenAI ordering prices (only gpt-4o/4o-mini listed today).**
-   - ✅ **Done 2026-06-15:** rate-limit the analytics read endpoint — `GET /api/orgs/:orgId/analytics` now uses the shared `FixedWindowLimiter` (default 60/min/IP, override via `ApiDeps.analyticsRateLimit`), checked before auth/DB work, returns 429 + `Retry-After`. TDD; 178 server tests.
+   - ✅ **Done 2026-06-15:** rate-limit the analytics read endpoint — `GET /api/orgs/:orgId/analytics` now uses the shared `FixedWindowLimiter` (default 60/min/IP, override via `ApiDeps.analyticsRateLimit` or the **`MAKEDOWN_ANALYTICS_RATE_LIMIT`** env var = max/min), checked before auth/DB work, returns 429 + `Retry-After`. TDD; 181 server tests.
 
 ---
 
