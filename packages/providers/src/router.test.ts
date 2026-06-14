@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { parseModelRef, createProviderRouter } from "./router.js";
 import { AnthropicProvider } from "./anthropic.js";
+import { OpenAICompatibleProvider } from "./openai.js";
 import { ProviderError } from "./errors.js";
 
 afterEach(() => {
@@ -96,6 +97,29 @@ describe("createProviderRouter", () => {
     });
     expect(result.text).toBe("anthropic-served");
     expect(result.model).toBe("anthropic:claude-haiku-4-5");
+  });
+
+  it("skips an unconfigured anthropic primary and lands on a configured openai fallback", async () => {
+    const router = createProviderRouter({ openai: { apiKey: "k" } }); // no anthropic key
+    vi.spyOn(OpenAICompatibleProvider.prototype, "complete").mockResolvedValue({
+      text: "openai-served",
+      usage: { input: 1, output: 1 },
+    });
+    const result = await router.complete({
+      model: "anthropic:claude-opus-4-8",
+      fallback: ["openai:gpt-5"],
+      prompt: "p",
+      params: {},
+    });
+    expect(result.text).toBe("openai-served");
+    expect(result.model).toBe("openai:gpt-5");
+  });
+
+  it("fails fatally on an unknown default provider", async () => {
+    const router = createProviderRouter({ defaultProvider: "mystery" });
+    await expect(
+      router.complete({ model: "bare-model", prompt: "p", params: {} }),
+    ).rejects.toMatchObject({ kind: "bad_request" });
   });
 
   it("does not retry on a fatal (bad request) error", async () => {
