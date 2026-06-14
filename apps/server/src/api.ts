@@ -26,6 +26,8 @@ import { BuildManager } from "./builds.js";
 import { getGraph, getArtifact, getProvenance, getCost } from "./artifacts.js";
 import { collectProvenanceRows } from "./provenance-index.js";
 import { registerAuthRoutes } from "./auth-routes.js";
+import { registerShareRoutes } from "./share-routes.js";
+import { SharingService, InMemoryShareStore } from "./sharing/index.js";
 import { NullTenancy, type TenancyProvider, type Principal, type Action } from "./tenancy/index.js";
 import { SESSION_COOKIE, parseCookie } from "./tenancy/cookies.js";
 
@@ -51,6 +53,11 @@ export interface ApiDeps {
   readonly logger?: boolean;
   /** Tenancy provider. Defaults to the permissive single-tenant NullTenancy. */
   readonly tenancy?: TenancyProvider;
+  /**
+   * Sharing service (public read-only artifact links). Works in both modes;
+   * defaults to an in-memory store (fine for tests — main wires a durable one).
+   */
+  readonly sharing?: SharingService;
   /** Set the Secure attribute on the session cookie (HTTPS deployments). */
   readonly secureCookies?: boolean;
 }
@@ -63,6 +70,7 @@ export function buildApi(deps: ApiDeps): FastifyInstance {
   const app = Fastify({ logger: deps.logger ?? false });
   const contextFactory = deps.contextFactory ?? makeServerContext;
   const tenancy = deps.tenancy ?? new NullTenancy();
+  const sharing = deps.sharing ?? new SharingService(new InMemoryShareStore());
 
   app.decorateRequest("user", undefined);
 
@@ -152,6 +160,7 @@ export function buildApi(deps: ApiDeps): FastifyInstance {
   app.get("/api/health", async () => ({ ok: true }));
 
   registerAuthRoutes(app, { tenancy, secureCookies: deps.secureCookies ?? false });
+  registerShareRoutes(app, { sharing, store: deps.store, ensureAuthorized });
 
   app.get("/api/workspaces", async (req, reply) => {
     const all = await deps.store.list();
