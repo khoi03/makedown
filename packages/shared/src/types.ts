@@ -12,6 +12,13 @@ export type Sandbox = "worktree" | "container" | "none";
 /** Whether an artifact must be human-approved before downstream consumption. */
 export type Approval = "none" | "required";
 
+/**
+ * How the provider router orders a target's fallback candidates. `strict`
+ * tries them in declared order; `cost-aware` keeps the primary first but sorts
+ * the fallback alternatives cheapest-first. See SPEC.md §7.
+ */
+export type RoutePolicy = "strict" | "cost-aware";
+
 /** Cache / determinism policy for a target. See SPEC.md §7. */
 export type CachePolicy =
   | { readonly kind: "deterministic" }

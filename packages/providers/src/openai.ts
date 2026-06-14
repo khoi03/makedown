@@ -8,6 +8,7 @@
  */
 import type { CompletionRequest, CompletionResult, Provider } from "./provider.js";
 import { resolveMaxTokens } from "./params.js";
+import { ProviderError, kindFromStatus } from "./errors.js";
 
 export interface OpenAICompatibleConfig {
   readonly apiKey: string;
@@ -29,26 +30,41 @@ export class OpenAICompatibleProvider implements Provider {
 
   async complete(request: CompletionRequest): Promise<CompletionResult> {
     const base = (this.config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
-    const response = await fetch(`${base}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${this.config.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: request.model,
-        messages: [
-          ...(request.system ? [{ role: "system", content: request.system }] : []),
-          { role: "user", content: request.prompt },
-        ],
-        max_tokens: resolveMaxTokens(request.params),
-      }),
-    });
+    let response: Awaited<ReturnType<typeof fetch>>;
+    try {
+      response = await fetch(`${base}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${this.config.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: request.model,
+          messages: [
+            ...(request.system ? [{ role: "system", content: request.system }] : []),
+            { role: "user", content: request.prompt },
+          ],
+          max_tokens: resolveMaxTokens(request.params),
+        }),
+      });
+    } catch (err) {
+      // fetch rejects on DNS/connection failure or abort — a transient timeout.
+      throw new ProviderError(
+        `OpenAI-compatible request failed: ${(err as Error)?.message ?? "network error"}`,
+        "timeout",
+        "openai",
+        undefined,
+        { cause: err },
+      );
+    }
 
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
-      throw new Error(
+      throw new ProviderError(
         `OpenAI-compatible request failed (${response.status} ${response.statusText}): ${detail}`,
+        kindFromStatus(response.status),
+        "openai",
+        response.status,
       );
     }
 
@@ -58,6 +74,6 @@ export class OpenAICompatibleProvider implements Provider {
       input: data.usage?.prompt_tokens ?? 0,
       output: data.usage?.completion_tokens ?? 0,
     };
-    return { text, usage };
+    return { text, usage, model: request.model };
   }
 }

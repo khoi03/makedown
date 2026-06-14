@@ -112,4 +112,37 @@ describe("AnthropicProvider.complete", () => {
     const arg = createMock.mock.calls[0]![0] as Record<string, unknown>;
     expect(arg["max_tokens"]).toBe(512);
   });
+
+  it("reports the model that produced the result", async () => {
+    createMock.mockResolvedValue({
+      content: [{ type: "text", text: "x" }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+    const provider = new AnthropicProvider({ apiKey: "test-key" });
+    const result = await provider.complete({ model: "claude-opus-4-8", prompt: "p", params: {} });
+    expect(result.model).toBe("claude-opus-4-8");
+  });
+
+  it.each([
+    [429, "rate_limit"],
+    [503, "overload"],
+    [500, "server"],
+    [400, "bad_request"],
+    [401, "auth"],
+    [404, "unavailable"],
+  ] as const)("maps an SDK %i error to a ProviderError(%s)", async (status, kind) => {
+    createMock.mockRejectedValue(Object.assign(new Error("api error"), { status }));
+    const provider = new AnthropicProvider({ apiKey: "test-key" });
+    await expect(
+      provider.complete({ model: "claude-opus-4-8", prompt: "p", params: {} }),
+    ).rejects.toMatchObject({ name: "ProviderError", kind, provider: "anthropic", status });
+  });
+
+  it("maps a connection error (no status) to a retryable timeout", async () => {
+    createMock.mockRejectedValue(Object.assign(new Error("socket hang up"), { name: "APIConnectionError" }));
+    const provider = new AnthropicProvider({ apiKey: "test-key" });
+    await expect(
+      provider.complete({ model: "claude-opus-4-8", prompt: "p", params: {} }),
+    ).rejects.toMatchObject({ name: "ProviderError", kind: "timeout", provider: "anthropic" });
+  });
 });

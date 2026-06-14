@@ -10,6 +10,27 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { CompletionRequest, CompletionResult, Provider } from "./provider.js";
 import { resolveMaxTokens } from "./params.js";
+import { ProviderError, kindFromStatus } from "./errors.js";
+
+/** Translate an Anthropic SDK / network failure into a classified ProviderError. */
+function toProviderError(err: unknown): ProviderError {
+  if (err instanceof ProviderError) return err;
+  const status = (err as { status?: unknown })?.status;
+  if (typeof status === "number") {
+    return new ProviderError(messageOf(err, `Anthropic request failed (${status})`), kindFromStatus(status), "anthropic", status, { cause: err });
+  }
+  // Connection/timeout/abort errors carry no status — treat as a transient timeout.
+  const name = (err as { name?: unknown })?.name;
+  if (typeof name === "string" && /connection|timeout|abort/i.test(name)) {
+    return new ProviderError(messageOf(err, "Anthropic connection error"), "timeout", "anthropic", undefined, { cause: err });
+  }
+  return new ProviderError(messageOf(err, "Anthropic request failed"), "unknown", "anthropic", undefined, { cause: err });
+}
+
+function messageOf(err: unknown, fallback: string): string {
+  const m = (err as { message?: unknown })?.message;
+  return typeof m === "string" && m.length > 0 ? m : fallback;
+}
 
 export interface AnthropicConfig {
   readonly apiKey: string;
@@ -56,13 +77,21 @@ export class AnthropicProvider implements Provider {
     this.client = new Anthropic({ apiKey: config.apiKey, baseURL: config.baseUrl });
   }
 
+  private async send(request: CompletionRequest) {
+    try {
+      return await this.client.messages.create({
+        model: request.model,
+        max_tokens: resolveMaxTokens(request.params),
+        ...(request.system ? { system: request.system } : {}),
+        messages: [{ role: "user", content: request.prompt }],
+      });
+    } catch (err) {
+      throw toProviderError(err);
+    }
+  }
+
   async complete(request: CompletionRequest): Promise<CompletionResult> {
-    const message = await this.client.messages.create({
-      model: request.model,
-      max_tokens: resolveMaxTokens(request.params),
-      ...(request.system ? { system: request.system } : {}),
-      messages: [{ role: "user", content: request.prompt }],
-    });
+    const message = await this.send(request);
 
     let text = "";
     for (const block of message.content) {
@@ -73,6 +102,11 @@ export class AnthropicProvider implements Provider {
       input: message.usage.input_tokens,
       output: message.usage.output_tokens,
     };
-    return { text, usage, costUsd: estimateCostUsd(request.model, usage.input, usage.output) };
+    return {
+      text,
+      usage,
+      costUsd: estimateCostUsd(request.model, usage.input, usage.output),
+      model: request.model,
+    };
   }
 }
