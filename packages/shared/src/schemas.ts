@@ -9,6 +9,7 @@ import type { CachePolicy } from "./types.js";
 export const stepSchema = z.enum(["chat", "agent", "transform", "eval", "map"]);
 export const sandboxSchema = z.enum(["worktree", "container", "none"]);
 export const approvalSchema = z.enum(["none", "required"]);
+export const routeSchema = z.enum(["strict", "cost-aware"]);
 
 /** Raw recipe header as it appears in YAML (cache is still a string here). */
 export const recipeHeaderSchema = z
@@ -16,6 +17,8 @@ export const recipeHeaderSchema = z
     inputs: z.array(z.string()).default([]),
     step: stepSchema.default("chat"),
     model: z.string().optional(),
+    fallback: z.array(z.string()).optional(),
+    route: routeSchema.optional(),
     system: z.string().optional(),
     params: z.record(z.unknown()).default({}),
     output: z.string().optional(),

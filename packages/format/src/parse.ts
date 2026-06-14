@@ -167,6 +167,8 @@ function mergeDefaults(name: string, raw: RawRecipeHeader, fm: FrontMatter): Rec
     inputs: raw.inputs,
     step: raw.step,
     model: raw.model ?? fm.defaults?.model,
+    fallback: raw.fallback,
+    route: raw.route,
     system: raw.system ?? fm.defaults?.system,
     params: { ...(fm.defaults?.params ?? {}), ...raw.params },
     output: raw.output ?? `${fm.artifactsDir}/${name}.md`,

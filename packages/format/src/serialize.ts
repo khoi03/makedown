@@ -41,6 +41,8 @@ function serializeTarget(target: TargetBlock): string {
   const h = target.header;
   const header: Record<string, unknown> = { inputs: h.inputs, step: h.step };
   if (h.model) header["model"] = h.model;
+  if (h.fallback && h.fallback.length > 0) header["fallback"] = h.fallback;
+  if (h.route) header["route"] = h.route;
   if (h.system) header["system"] = h.system;
   if (Object.keys(h.params).length > 0) header["params"] = h.params;
   header["output"] = h.output;

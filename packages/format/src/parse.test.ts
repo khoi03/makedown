@@ -73,6 +73,35 @@ describe("parseBuildDoc", () => {
     expect(twice.targets.map((t) => t.name)).toEqual(once.targets.map((t) => t.name));
     expect(twice.targets[1]!.header.cache).toEqual(once.targets[1]!.header.cache);
   });
+
+  it("parses a fallback chain and route policy", () => {
+    const doc = parseBuildDoc(
+      `## target: t\n\`\`\`yaml\ninputs: []\nstep: chat\nmodel: anthropic:claude-opus-4-8\nfallback: [anthropic:claude-sonnet-4-6, openai:gpt-5]\nroute: cost-aware\n\`\`\`\nHi.\n`,
+    );
+    const header = doc.targets[0]!.header;
+    expect(header.fallback).toEqual(["anthropic:claude-sonnet-4-6", "openai:gpt-5"]);
+    expect(header.route).toBe("cost-aware");
+  });
+
+  it("leaves fallback/route undefined when not declared", () => {
+    const doc = parseBuildDoc(`## target: t\n\`\`\`yaml\ninputs: []\nstep: chat\n\`\`\`\nHi.\n`);
+    expect(doc.targets[0]!.header.fallback).toBeUndefined();
+    expect(doc.targets[0]!.header.route).toBeUndefined();
+  });
+
+  it("rejects an unknown route policy", () => {
+    const bad = `## target: t\n\`\`\`yaml\ninputs: []\nstep: chat\nroute: cheapest\n\`\`\`\nHi.\n`;
+    expect(() => parseBuildDoc(bad)).toThrow(BuildDocParseError);
+  });
+
+  it("round-trips fallback + route through the serializer", () => {
+    const doc = parseBuildDoc(
+      `## target: t\n\`\`\`yaml\ninputs: []\nstep: chat\nmodel: anthropic:claude-opus-4-8\nfallback: [anthropic:claude-haiku-4-5]\nroute: cost-aware\n\`\`\`\nHi.\n`,
+    );
+    const reparsed = parseBuildDoc(serializeBuildDoc(doc)).targets[0]!.header;
+    expect(reparsed.fallback).toEqual(["anthropic:claude-haiku-4-5"]);
+    expect(reparsed.route).toBe("cost-aware");
+  });
 });
 
 describe("refsInBody", () => {

@@ -33,6 +33,13 @@ export interface RecipeHeader {
   readonly inputs: readonly string[];
   readonly step: StepType;
   readonly model?: string;
+  /**
+   * Ordered fallback models (each a `provider:model` ref) tried when the primary
+   * fails transiently. Folds into the identity hash (part of the target's spec).
+   */
+  readonly fallback?: readonly string[];
+  /** How the router orders the fallback candidates. Default: "strict". */
+  readonly route?: RoutePolicy;
   /** System prompt for the model. May contain `{{ref}}` interpolations. */
   readonly system?: string;
   readonly params: Readonly<Record<string, unknown>>;
@@ -98,7 +105,12 @@ export interface Provenance {
   readonly id: string;
   readonly output: string;
   readonly step: StepType;
+  /** The model that actually produced this artifact (after any fallback). */
   readonly model?: string;
+  /** The model the recipe requested, set only when a fallback changed it. */
+  readonly requestedModel?: string;
+  /** True when the router fell back from `requestedModel` to `model`. */
+  readonly fellBack?: boolean;
   readonly params: Readonly<Record<string, unknown>>;
   readonly inputs: readonly ResolvedInput[];
   readonly promptHash: string;
