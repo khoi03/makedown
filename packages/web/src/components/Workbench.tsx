@@ -22,9 +22,11 @@ export interface WorkbenchProps {
   readonly api: ApiClient;
   readonly workspaceId: string;
   readonly user: LocalUser;
+  /** Return to the workspace picker. */
+  readonly onBack: () => void;
 }
 
-export function Workbench({ api, workspaceId, user }: WorkbenchProps) {
+export function Workbench({ api, workspaceId, user, onBack }: WorkbenchProps) {
   const { doc, provider, status } = useCollaborativeDoc(workspaceId, api.syncBaseUrl(), user);
   const [graph, setGraph] = useState<GraphView>();
   const [selected, setSelected] = useState<string>();
@@ -150,6 +152,7 @@ export function Workbench({ api, workspaceId, user }: WorkbenchProps) {
         onBuild={onBuild}
         onSnapshot={onSnapshot}
         onSwitchBranch={onSwitchBranch}
+        onBack={onBack}
       />
       <div className="workbench__panes">
         <section className="pane">

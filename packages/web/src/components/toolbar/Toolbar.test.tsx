@@ -13,6 +13,7 @@ function setup(overrides: Partial<Parameters<typeof Toolbar>[0]> = {}) {
     onBuild: vi.fn(),
     onSnapshot: vi.fn(),
     onSwitchBranch: vi.fn(),
+    onBack: vi.fn(),
     ...overrides,
   };
   render(<Toolbar {...props} />);
@@ -38,6 +39,12 @@ describe("Toolbar", () => {
     await userEvent.click(screen.getByRole("button", { name: /snapshot/i }));
     expect(props.onSwitchBranch).toHaveBeenCalledOnce();
     expect(props.onSnapshot).toHaveBeenCalledOnce();
+  });
+
+  it("returns to the workspace picker when the brand is clicked", async () => {
+    const props = setup();
+    await userEvent.click(screen.getByRole("button", { name: /workspaces/i }));
+    expect(props.onBack).toHaveBeenCalledOnce();
   });
 
   it("renders collaborator presence initials", () => {

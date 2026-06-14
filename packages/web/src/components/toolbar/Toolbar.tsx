@@ -17,16 +17,24 @@ export interface ToolbarProps {
   readonly onBuild: () => void;
   readonly onSnapshot: () => void;
   readonly onSwitchBranch: () => void;
+  /** Return to the workspace picker. */
+  readonly onBack: () => void;
 }
 
 export function Toolbar(props: ToolbarProps) {
-  const { workspaceId, connection, branch, peers, building, onBuild, onSnapshot, onSwitchBranch } = props;
+  const { workspaceId, connection, branch, peers, building, onBuild, onSnapshot, onSwitchBranch, onBack } =
+    props;
   return (
     <header className="toolbar">
       <div className="toolbar__left">
-        <span className="toolbar__brand">
+        <button
+          className="toolbar__brand"
+          onClick={onBack}
+          title="Back to workspaces"
+          aria-label="Back to workspaces"
+        >
           make<span className="toolbar__brand-accent">down</span>
-        </span>
+        </button>
         <span className="toolbar__sep" aria-hidden />
         <span className="toolbar__workspace">{workspaceId}</span>
         <button className="toolbar__branch" onClick={onSwitchBranch} title="Switch or create a branch">

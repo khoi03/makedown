@@ -54,7 +54,7 @@ export function App() {
       </Suspense>
     ) : route.kind === "workspace" ? (
       <Suspense fallback={<div className="app-loading">Opening workspace…</div>}>
-        <Workbench key={route.id} api={api} workspaceId={route.id} user={user} />
+        <Workbench key={route.id} api={api} workspaceId={route.id} user={user} onBack={goPicker} />
       </Suspense>
     ) : (
       <WorkspacePicker
