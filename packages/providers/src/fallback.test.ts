@@ -37,14 +37,21 @@ describe("buildChain", () => {
     ]);
   });
 
-  it("cost-aware sorts unknown-priced models last, stably", () => {
+  it("cost-aware sorts priced models ascending and unpriced models last, stably", () => {
+    // haiku (3) < gpt-4o (6.25) < the two unpriced models, which keep declared order.
     const chain = buildChain(
       "p",
-      ["openai:gpt-5", "anthropic:claude-haiku-4-5", "openai:gpt-4o"],
+      ["openai:unlisted-a", "anthropic:claude-haiku-4-5", "openai:gpt-4o", "openai:unlisted-b"],
       "cost-aware",
       "anthropic",
     );
-    expect(chain).toEqual(["p", "anthropic:claude-haiku-4-5", "openai:gpt-5", "openai:gpt-4o"]);
+    expect(chain).toEqual([
+      "p",
+      "anthropic:claude-haiku-4-5",
+      "openai:gpt-4o",
+      "openai:unlisted-a",
+      "openai:unlisted-b",
+    ]);
   });
 });
 
