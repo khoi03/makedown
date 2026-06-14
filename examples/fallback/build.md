@@ -24,8 +24,8 @@ matter which chain member answered.
 ```yaml
 inputs: [sources/topic.md]
 step: chat
-model: anthropic:claude-opus-4-8
-fallback: [anthropic:claude-sonnet-4-6, openai:gpt-5]
+model: anthropic:cc/claude-sonnet-4-6
+fallback: [anthropic:cc/claude-haiku-4-5-20251001, openai:gemma4:31b-cloud]
 output: artifacts/resilient.md
 cache: deterministic
 ```
@@ -37,7 +37,7 @@ Explain the topic in {{sources/topic.md}} to a smart 12-year-old, in exactly fou
 inputs: [sources/topic.md]
 step: chat
 model: anthropic:claude-nonexistent-9
-fallback: [anthropic:claude-sonnet-4-6]
+fallback: [anthropic:cc/claude-sonnet-4-6]
 output: artifacts/forced.md
 cache: deterministic
 ```
@@ -53,8 +53,8 @@ Explain the topic in {{sources/topic.md}} to a smart 12-year-old, in exactly fou
 ```yaml
 inputs: [sources/topic.md]
 step: chat
-model: anthropic:claude-opus-4-8
-fallback: [anthropic:claude-opus-4-7, anthropic:claude-haiku-4-5, anthropic:claude-sonnet-4-6]
+model: anthropic:cc/claude-opus-4-6
+fallback: [anthropic:cc/claude-haiku-4-5-20251001, anthropic:cc/claude-sonnet-4-6]
 route: cost-aware
 output: artifacts/cheap.md
 cache: deterministic
