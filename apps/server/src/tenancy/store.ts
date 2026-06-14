@@ -13,6 +13,7 @@ import type {
   Session,
   ProvenanceRow,
 } from "./types.js";
+import type { AnalyticsRange, AnalyticsBreakdowns } from "./analytics.js";
 
 /** Thrown when a uniqueness constraint (email, org slug, workspace id) is violated. */
 export class DuplicateError extends Error {
@@ -80,4 +81,14 @@ export interface TenancyStore {
   upsertProvenance(row: ProvenanceRow): Promise<void>;
   listProvenanceForWorkspace(workspaceId: string): Promise<ProvenanceRow[]>;
   deleteProvenanceForWorkspace(workspaceId: string): Promise<void>;
+
+  /**
+   * Aggregate the org's provenance index into cost/usage breakdowns within an
+   * optional time window. Aggregation happens in the data layer (SQL `GROUP BY`
+   * / in-memory reduction) so the full row set is never materialized.
+   */
+  aggregateProvenanceForOrg(
+    orgId: string,
+    range?: AnalyticsRange,
+  ): Promise<AnalyticsBreakdowns>;
 }

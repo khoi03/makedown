@@ -8,8 +8,9 @@ import { can, ROLES, type Role, type Action } from "./rbac.js";
  * through silently.
  */
 describe("can", () => {
-  it("grants viewers read-only access and nothing else", () => {
+  it("grants viewers read-only access (incl. analytics) and nothing else", () => {
     expect(can("viewer", "workspace:read")).toBe(true);
+    expect(can("viewer", "analytics:read")).toBe(true);
     expect(can("viewer", "workspace:build")).toBe(false);
     expect(can("viewer", "workspace:snapshot")).toBe(false);
     expect(can("viewer", "member:manage")).toBe(false);

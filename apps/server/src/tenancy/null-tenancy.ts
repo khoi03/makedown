@@ -20,6 +20,11 @@ export class NullTenancy implements TenancyProvider {
     return true;
   }
 
+  /** Org-scoped actions are likewise unrestricted in single-tenant mode. */
+  async authorizeOrg(): Promise<boolean> {
+    return true;
+  }
+
   /** `undefined` = unrestricted: the server lists all on-disk workspaces. */
   async accessibleWorkspaceIds(): Promise<undefined> {
     return undefined;
@@ -52,5 +57,10 @@ export class NullTenancy implements TenancyProvider {
 
   async recordProvenance(): Promise<void> {
     /* no-op: there is no index without a database */
+  }
+
+  /** No index without a database → the dashboard shows a single-tenant notice. */
+  async analytics(): Promise<undefined> {
+    return undefined;
   }
 }

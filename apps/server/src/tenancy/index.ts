@@ -16,6 +16,14 @@ export { can, ROLES, type Role, type Action } from "./rbac.js";
 export { DuplicateError, type TenancyStore } from "./store.js";
 export type { TenancyProvider, Principal, AuthResult, ProvenanceInput } from "./provider.js";
 export type { User, Org, Membership, Workspace, Session, ProvenanceRow } from "./types.js";
+export {
+  NO_MODEL_KEY,
+  type AnalyticsRange,
+  type AnalyticsBucket,
+  type AnalyticsTotals,
+  type AnalyticsBreakdowns,
+  type AnalyticsSummary,
+} from "./analytics.js";
 
 export interface CreateTenancyOptions {
   /** Environment to read configuration from. Defaults to `process.env`. */

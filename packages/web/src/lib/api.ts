@@ -4,6 +4,7 @@
  * reads as "not built" (undefined), and throws {@link ApiError} otherwise.
  */
 import type {
+  AnalyticsResponse,
   ArtifactView,
   BranchInfo,
   BuildCost,
@@ -112,6 +113,19 @@ export class ApiClient {
   async listOrgs(): Promise<Org[]> {
     const { orgs } = await this.get<{ orgs: Org[] }>("/api/orgs");
     return orgs;
+  }
+
+  /**
+   * Org-scoped cost analytics over an optional `[from, to)` window. A
+   * single-tenant server returns `{ enabled: false }` (no index) so the
+   * dashboard can render a graceful empty state instead of erroring.
+   */
+  getAnalytics(orgId: string, range: { from?: string; to?: string } = {}): Promise<AnalyticsResponse> {
+    const qs = new URLSearchParams();
+    if (range.from) qs.set("from", range.from);
+    if (range.to) qs.set("to", range.to);
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return this.get<AnalyticsResponse>(`/api/orgs/${enc(orgId)}/analytics${suffix}`);
   }
 
   async registerWorkspace(orgId: string, workspaceId: string): Promise<void> {

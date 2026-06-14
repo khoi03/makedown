@@ -27,6 +27,7 @@ import { getGraph, getArtifact, getProvenance, getCost } from "./artifacts.js";
 import { collectProvenanceRows } from "./provenance-index.js";
 import { registerAuthRoutes } from "./auth-routes.js";
 import { registerShareRoutes } from "./share-routes.js";
+import { registerAnalyticsRoutes } from "./analytics-routes.js";
 import { SharingService, InMemoryShareStore } from "./sharing/index.js";
 import { NullTenancy, type TenancyProvider, type Principal, type Action } from "./tenancy/index.js";
 import { SESSION_COOKIE, parseCookie } from "./tenancy/cookies.js";
@@ -163,6 +164,7 @@ export function buildApi(deps: ApiDeps): FastifyInstance {
 
   registerAuthRoutes(app, { tenancy, secureCookies: deps.secureCookies ?? false });
   registerShareRoutes(app, { sharing, store: deps.store, ensureAuthorized, rateLimit: deps.shareRateLimit });
+  registerAnalyticsRoutes(app, { tenancy });
 
   app.get("/api/workspaces", async (req, reply) => {
     const all = await deps.store.list();

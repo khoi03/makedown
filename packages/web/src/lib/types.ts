@@ -129,3 +129,37 @@ export interface ShareSummary {
   readonly expiresAt: string | null;
   readonly revoked: boolean;
 }
+
+// --- cost analytics (mirrors the server's tenancy/analytics shapes) ----------
+
+/** One aggregated slice: a workspace, a model, a target, or a `YYYY-MM-DD` day. */
+export interface AnalyticsBucket {
+  readonly key: string;
+  readonly tokensInput: number;
+  readonly tokensOutput: number;
+  readonly costUsd: number;
+  readonly runs: number;
+}
+
+export interface AnalyticsTotals {
+  readonly tokensInput: number;
+  readonly tokensOutput: number;
+  readonly costUsd: number;
+  readonly runs: number;
+}
+
+export interface AnalyticsSummary {
+  readonly orgId: string;
+  readonly range: { readonly from: string | null; readonly to: string | null };
+  readonly totals: AnalyticsTotals;
+  readonly byWorkspace: readonly AnalyticsBucket[];
+  readonly byModel: readonly AnalyticsBucket[];
+  readonly byTarget: readonly AnalyticsBucket[];
+  readonly byDay: readonly AnalyticsBucket[];
+}
+
+/** The analytics endpoint envelope: `enabled:false` ⇒ single-tenant (no index). */
+export interface AnalyticsResponse {
+  readonly enabled: boolean;
+  readonly summary?: AnalyticsSummary;
+}

@@ -14,29 +14,55 @@ const Workbench = lazy(() =>
   import("./components/Workbench.js").then((m) => ({ default: m.Workbench })),
 );
 
-function workspaceFromHash(): string | undefined {
-  const m = /^#\/([^/?#]+)/.exec(window.location.hash);
-  return m?.[1] ? decodeURIComponent(m[1]) : undefined;
+// The analytics dashboard is its own route; lazy-load it too so it never weighs
+// down the landing bundle.
+const Dashboard = lazy(() =>
+  import("./components/dashboard/Dashboard.js").then((m) => ({ default: m.Dashboard })),
+);
+
+type Route =
+  | { readonly kind: "picker" }
+  | { readonly kind: "analytics" }
+  | { readonly kind: "workspace"; readonly id: string };
+
+function routeFromHash(): Route {
+  const hash = window.location.hash;
+  if (/^#\/analytics\b/.test(hash)) return { kind: "analytics" };
+  const m = /^#\/([^/?#]+)/.exec(hash);
+  return m?.[1] ? { kind: "workspace", id: decodeURIComponent(m[1]) } : { kind: "picker" };
 }
 
 export function App() {
   const api = useMemo(() => new ApiClient(), []);
   const user = useMemo(() => makeLocalUser(), []);
-  const [workspaceId, setWorkspaceId] = useState<string | undefined>(workspaceFromHash);
+  const [route, setRoute] = useState<Route>(routeFromHash);
 
   useEffect(() => {
-    const onHash = (): void => setWorkspaceId(workspaceFromHash());
+    const onHash = (): void => setRoute(routeFromHash());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  const body = !workspaceId ? (
-    <WorkspacePicker api={api} onPick={(id) => (window.location.hash = `#/${encodeURIComponent(id)}`)} />
-  ) : (
-    <Suspense fallback={<div className="app-loading">Opening workspace…</div>}>
-      <Workbench key={workspaceId} api={api} workspaceId={workspaceId} user={user} />
-    </Suspense>
-  );
+  const goPicker = (): void => {
+    window.location.hash = "";
+  };
+
+  const body =
+    route.kind === "analytics" ? (
+      <Suspense fallback={<div className="app-loading">Loading analytics…</div>}>
+        <Dashboard api={api} onBack={goPicker} />
+      </Suspense>
+    ) : route.kind === "workspace" ? (
+      <Suspense fallback={<div className="app-loading">Opening workspace…</div>}>
+        <Workbench key={route.id} api={api} workspaceId={route.id} user={user} />
+      </Suspense>
+    ) : (
+      <WorkspacePicker
+        api={api}
+        onPick={(id) => (window.location.hash = `#/${encodeURIComponent(id)}`)}
+        onOpenAnalytics={() => (window.location.hash = "#/analytics")}
+      />
+    );
 
   // The gate is a no-op (renders `body` directly) when the server is
   // single-tenant; it only interposes a sign-in screen when auth is enabled.

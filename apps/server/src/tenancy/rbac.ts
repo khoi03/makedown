@@ -21,6 +21,7 @@ export type Action =
   | "workspace:create"
   | "approval:resolve"
   | "share:create"
+  | "analytics:read"
   | "member:manage"
   | "org:delete";
 
@@ -36,6 +37,7 @@ const MIN_ROLE: Record<Action, Role> = {
   "workspace:create": "member",
   "approval:resolve": "member",
   "share:create": "member",
+  "analytics:read": "viewer",
   "member:manage": "admin",
   "org:delete": "owner",
 };

@@ -155,6 +155,46 @@ describe("TenancyService", () => {
       ).resolves.toBeUndefined();
     });
   });
+
+  describe("analytics", () => {
+    it("returns org-scoped breakdowns + echoes the selection", async () => {
+      const { user, org } = await service.signup("an@example.com", "analytics-pass-1");
+      const ws = await service.createWorkspace({ id: "wa", orgId: org.id, slug: "wa", userId: user.id });
+      await service.recordProvenance(ws.id, [
+        { id: "h1", workspaceId: ws.id, target: "t1", step: "chat", model: "claude-opus-4-8", tokensInput: 10, tokensOutput: 5, costUsd: 0.01, producedAt: "2026-06-12T00:00:00Z" },
+        { id: "h2", workspaceId: ws.id, target: "t2", step: "chat", model: "gpt-4o", tokensInput: 20, tokensOutput: 8, costUsd: 0.02, producedAt: "2026-06-13T00:00:00Z" },
+      ]);
+
+      const summary = await service.analytics(org.id);
+      expect(summary).toBeDefined();
+      expect(summary!.orgId).toBe(org.id);
+      expect(summary!.range).toEqual({ from: null, to: null });
+      expect(summary!.totals).toMatchObject({ runs: 2, costUsd: 0.03 });
+      expect(summary!.byModel).toHaveLength(2);
+    });
+
+    it("passes the range through to the store", async () => {
+      const { user, org } = await service.signup("an2@example.com", "analytics-pass-2");
+      const ws = await service.createWorkspace({ id: "wb", orgId: org.id, slug: "wb", userId: user.id });
+      await service.recordProvenance(ws.id, [
+        { id: "h1", workspaceId: ws.id, target: "t1", step: "chat", model: "m", tokensInput: 10, tokensOutput: 5, costUsd: 0.01, producedAt: "2026-06-12T00:00:00Z" },
+        { id: "h2", workspaceId: ws.id, target: "t2", step: "chat", model: "m", tokensInput: 20, tokensOutput: 8, costUsd: 0.02, producedAt: "2026-06-14T00:00:00Z" },
+      ]);
+      const summary = await service.analytics(org.id, { from: "2026-06-13T00:00:00Z" });
+      expect(summary!.totals.runs).toBe(1);
+      expect(summary!.range.from).toBe("2026-06-13T00:00:00Z");
+    });
+  });
+
+  describe("authorizeOrg", () => {
+    it("authorizes an org member for analytics and denies a non-member", async () => {
+      const { user, org } = await service.signup("orgmem@example.com", "org-pass-123");
+      expect(await service.authorizeOrg(user.id, org.id, "analytics:read")).toBe(true);
+
+      const outsider = await service.signup("outsider@example.com", "out-pass-123");
+      expect(await service.authorizeOrg(outsider.user.id, org.id, "analytics:read")).toBe(false);
+    });
+  });
 });
 
 describe("NullTenancy", () => {
@@ -169,6 +209,11 @@ describe("NullTenancy", () => {
   it("resolves no principal (auth is off) and no-ops provenance", async () => {
     expect(await tenancy.authenticate("x")).toBeUndefined();
     await expect(tenancy.recordProvenance("w", [])).resolves.toBeUndefined();
+  });
+
+  it("has no analytics index (single-tenant) and is permissive on org authz", async () => {
+    expect(await tenancy.analytics("any-org")).toBeUndefined();
+    expect(await tenancy.authorizeOrg("anyone", "any-org", "analytics:read")).toBe(true);
   });
 
   it("refuses auth operations because auth is disabled", async () => {

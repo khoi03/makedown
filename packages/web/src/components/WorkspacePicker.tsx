@@ -7,9 +7,11 @@ import "./workspace-picker.css";
 export interface WorkspacePickerProps {
   readonly api: ApiClient;
   readonly onPick: (workspaceId: string) => void;
+  /** Open the cost analytics dashboard. */
+  readonly onOpenAnalytics?: () => void;
 }
 
-export function WorkspacePicker({ api, onPick }: WorkspacePickerProps) {
+export function WorkspacePicker({ api, onPick, onOpenAnalytics }: WorkspacePickerProps) {
   const [workspaces, setWorkspaces] = useState<string[] | undefined>();
   const [available, setAvailable] = useState<string[]>([]);
   const [orgs, setOrgs] = useState<Org[]>([]);
@@ -88,6 +90,15 @@ export function WorkspacePicker({ api, onPick }: WorkspacePickerProps) {
             </li>
           ))}
         </ul>
+
+        {onOpenAnalytics && (
+          <button type="button" className="picker__analytics" onClick={onOpenAnalytics}>
+            <span>View cost analytics</span>
+            <span className="picker__item-arrow" aria-hidden>
+              →
+            </span>
+          </button>
+        )}
 
         {canClaim && (
           <section className="picker__add">
