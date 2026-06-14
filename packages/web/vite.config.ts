@@ -19,6 +19,11 @@ export default defineConfig(({ mode }) => ({
     port: 5173,
     proxy: {
       "/api": { target: SERVER_ORIGIN, changeOrigin: true },
+      // Public read-only shared-artifact views are served by the server; proxy
+      // them so a copied share link opens against the dev app's own origin.
+      // The trailing slash is load-bearing: a bare "/s" prefix would also shadow
+      // the "/sync" WebSocket route (and drop its ws upgrade).
+      "/s/": { target: SERVER_ORIGIN, changeOrigin: true },
       // Kept as a fallback for clients that still hit the proxy path.
       "/sync": { target: SERVER_ORIGIN, ws: true, changeOrigin: true },
     },

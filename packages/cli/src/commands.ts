@@ -1,12 +1,13 @@
 /** Implementations behind the `md` subcommands. */
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { planBuild, runBuild, renderTarget, estimateBuildCost, type BuildPlan } from "@makedown/engine";
 import { cachePolicyToString, type BuildDoc } from "@makedown/shared";
 import { loadDoc, makeContext, resolveDir, hasAnyProvider, BUILD_FILE } from "./workspace.js";
 import { loadEnv } from "./env.js";
 import { colorEnabled, makeStyler } from "./format.js";
 import { renderStatus, renderGraph, renderBuildResult, renderCost, renderWhy } from "./render.js";
+import { renderShareHtml } from "./share.js";
 
 const styler = makeStyler(colorEnabled());
 
@@ -120,6 +121,52 @@ export async function cmdWhy(name: string, dirArg?: string): Promise<void> {
       styler,
     ),
   );
+}
+
+export interface ShareOptions {
+  /** Destination file; defaults to `<artifacts>/<target>.share.html`. */
+  readonly out?: string;
+  /** Include provenance (model, inputs, cost) in the exported page. */
+  readonly provenance?: boolean;
+  readonly dir?: string;
+}
+
+/**
+ * `md share <target>` — export a built artifact to a self-contained, read-only
+ * HTML file (the standalone, no-server sharing path). Reads the artifact from
+ * the local CAS by its current identity hash, so a stale/never-built target is
+ * reported rather than silently exporting nothing.
+ */
+export async function cmdShare(name: string, opts: ShareOptions = {}): Promise<void> {
+  const dir = resolveDir(opts.dir);
+  loadEnv(dir);
+  const doc = await loadDoc(dir);
+  const ctx = makeContext(dir);
+  const plan = await planBuild(doc, ctx);
+  const tp = plan.targets.find((t) => t.name === name);
+  if (!tp) {
+    console.error(styler.red(`Unknown target: ${name}`));
+    process.exitCode = 1;
+    return;
+  }
+
+  const bytes = await ctx.cas.get(tp.id);
+  if (!bytes) {
+    console.error(styler.red(`Target "${name}" is not built yet — run \`md build\` first.`));
+    process.exitCode = 1;
+    return;
+  }
+  const content = new TextDecoder().decode(bytes);
+  const provenance = opts.provenance ? await ctx.cas.getProvenance(tp.id) : undefined;
+
+  const target = doc.targets.find((t) => t.name === name)!;
+  const defaultOut = join(dir, target.header.output ? `${target.header.output}.share.html` : `${name}.share.html`);
+  const outPath = opts.out ? resolve(dir, opts.out) : defaultOut;
+  await mkdir(dirname(outPath), { recursive: true });
+  await writeFile(outPath, renderShareHtml({ target: name, content, provenance }), "utf8");
+
+  console.log(styler.green(`✓ Exported ${name} → ${outPath}`));
+  console.log(styler.dim("  Open it in a browser or host the file anywhere — it's fully self-contained."));
 }
 
 export async function cmdRender(name: string, dirArg?: string): Promise<void> {

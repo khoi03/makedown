@@ -7,6 +7,7 @@ import {
   cmdGraph,
   cmdInit,
   cmdRender,
+  cmdShare,
   cmdStatus,
   cmdWhy,
 } from "./commands.js";
@@ -61,6 +62,17 @@ program
   .description("Estimate what a build would run (dry run)")
   .argument("[dir]", "workspace directory")
   .action(cmdCost);
+
+program
+  .command("share")
+  .description("Export a built artifact to a self-contained, read-only HTML file")
+  .argument("<target>", "target name")
+  .argument("[dir]", "workspace directory")
+  .option("-o, --out <file>", "output file path (default: <output>.share.html)")
+  .option("--provenance", "include provenance (model, inputs, cost) in the export")
+  .action((target: string, dir: string | undefined, opts: { out?: string; provenance?: boolean }) =>
+    cmdShare(target, { dir, out: opts.out, provenance: opts.provenance }),
+  );
 
 program.parseAsync().catch((err: unknown) => {
   console.error(err instanceof Error ? err.message : String(err));

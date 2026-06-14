@@ -22,6 +22,7 @@ import { WorkspaceStore } from "./workspace.js";
 import { BuildManager } from "./builds.js";
 import { buildApi } from "./api.js";
 import { NullTenancy, createPostgresTenancy, type TenancyProvider } from "./tenancy/index.js";
+import { SharingService, FileShareStore } from "./sharing/index.js";
 
 export interface ServerOptions {
   readonly workspacesRoot: string;
@@ -33,6 +34,12 @@ export interface ServerOptions {
   readonly approvalTimeoutMs?: number;
   /** Tenancy provider (auth/RBAC). Defaults to single-tenant NullTenancy. */
   readonly tenancy?: TenancyProvider;
+  /**
+   * Sharing service (public read-only artifact links). Defaults to a durable
+   * file-backed store under the workspaces root, so single-tenant self-hosts get
+   * persistent links with no database.
+   */
+  readonly sharing?: SharingService;
   /** Set Secure on the session cookie (HTTPS deployments). */
   readonly secureCookies?: boolean;
 }
@@ -57,6 +64,9 @@ export function createServer(opts: ServerOptions): AssembledServer {
   const manager = new BuildManager({
     approvalTimeoutMs: opts.approvalTimeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS,
   });
+  // Durable by default: a file-backed registry under the workspaces root, so
+  // single-tenant self-hosts get persistent share links with no database.
+  const sharing = opts.sharing ?? new SharingService(new FileShareStore(opts.workspacesRoot));
 
   const docs = new Map<string, Y.Doc>();
   const persistences = new Map<string, WorkspacePersistence>();
@@ -106,6 +116,7 @@ export function createServer(opts: ServerOptions): AssembledServer {
     author: opts.author,
     logger: opts.logger,
     tenancy: opts.tenancy ?? new NullTenancy(),
+    sharing,
     secureCookies: opts.secureCookies,
     flushWorkspace: async (id) => {
       await persistences.get(id)?.flush();
@@ -168,11 +179,16 @@ async function main(): Promise<void> {
   const databaseUrl = process.env["DATABASE_URL"];
   const secureCookies = process.env["MAKEDOWN_SECURE_COOKIES"] === "1";
   let tenancy: TenancyProvider = new NullTenancy();
+  // Sharing is durable in both modes: Postgres when a database is configured,
+  // otherwise a file-backed registry under the workspaces root (the default).
+  let sharing: SharingService | undefined;
   if (databaseUrl) {
-    tenancy = (await createPostgresTenancy(databaseUrl)).tenancy;
+    const pg = await createPostgresTenancy(databaseUrl);
+    tenancy = pg.tenancy;
+    sharing = pg.sharing;
   }
 
-  const server = await start({ workspacesRoot, port, logger: true, tenancy, secureCookies });
+  const server = await start({ workspacesRoot, port, logger: true, tenancy, sharing, secureCookies });
   // eslint-disable-next-line no-console
   console.log(
     `Makedown server listening on ${server.url} (workspaces: ${workspacesRoot}, auth: ${tenancy.enabled ? "on" : "off"})`,

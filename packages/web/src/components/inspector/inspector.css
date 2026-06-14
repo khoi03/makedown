@@ -45,6 +45,11 @@
   font-size: var(--text-sm);
 }
 
+.inspector__artifact-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
 .inspector__artifact {
   margin: 0;
   padding: var(--space-4);

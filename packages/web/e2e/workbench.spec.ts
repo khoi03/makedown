@@ -33,6 +33,40 @@ test.describe("workbench", () => {
     await expect(page.locator(".inspector__artifact")).toContainText("HELLO FROM MAKEDOWN");
   });
 
+  test("share → public link renders the artifact read-only → revoke 404s", async ({ page, context }) => {
+    await page.goto("/#/demo");
+    await expect(page.getByTestId("editor")).toContainText("target: shout");
+
+    // Build, then open the artifact inspector. Asserting on the artifact (not a
+    // "Built" badge) keeps this order-independent: the target may already be
+    // built and reused if an earlier test produced it against the same server.
+    await page.getByRole("button", { name: /^build$/i }).click();
+    await page.locator(".target-node", { hasText: "shout" }).click();
+    await expect(page.locator(".inspector__artifact")).toContainText("HELLO FROM MAKEDOWN", {
+      timeout: 30_000,
+    });
+
+    // Mint a public link and read it out of the one-time input.
+    await page.getByRole("button", { name: "Create link" }).click();
+    const link = page.getByLabel("Share link");
+    await expect(link).toBeVisible();
+    const url = await link.inputValue();
+    expect(url).toMatch(/\/s\/.+/);
+
+    // A fresh tab (no app state) opens the link and sees the rendered artifact
+    // with no editor — a true public, read-only view.
+    const viewer = await context.newPage();
+    await viewer.goto(url);
+    await expect(viewer.locator("body")).toContainText("HELLO FROM MAKEDOWN");
+    await expect(viewer.locator(".cm-content")).toHaveCount(0);
+
+    // Revoke from the workbench; the link then 404s.
+    await page.getByRole("button", { name: "Revoke" }).click();
+    await viewer.goto(url);
+    await expect(viewer.locator("body")).toContainText(/not found/i);
+    await viewer.close();
+  });
+
   test("live edits sync between two clients without duplicating", async ({ browser }) => {
     const ctxA = await browser.newContext();
     const ctxB = await browser.newContext();
