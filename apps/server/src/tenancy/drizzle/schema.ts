@@ -122,4 +122,6 @@ CREATE TABLE IF NOT EXISTS provenance (
   PRIMARY KEY (workspace_id, id)
 );
 CREATE INDEX IF NOT EXISTS provenance_org_id_idx ON provenance (org_id);
+-- Composite index for the analytics dashboard's org-scoped, time-windowed scans.
+CREATE INDEX IF NOT EXISTS provenance_org_produced_idx ON provenance (org_id, produced_at);
 `;
