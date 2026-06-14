@@ -34,6 +34,10 @@ export interface Provenance {
   readonly output: string;
   readonly step: StepType;
   readonly model?: string;
+  /** The model the recipe requested, present only when a fallback changed it. */
+  readonly requestedModel?: string;
+  /** True when the router fell back from `requestedModel` to `model`. */
+  readonly fellBack?: boolean;
   readonly params: Readonly<Record<string, unknown>>;
   readonly inputs: readonly ResolvedInput[];
   readonly promptHash: string;
