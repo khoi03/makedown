@@ -7,10 +7,14 @@ import type {
   ArtifactView,
   BranchInfo,
   BuildCost,
+  CreatedShare,
   GraphView,
   Provenance,
+  ShareSummary,
   Snapshot,
 } from "./types.js";
+
+export type { CreatedShare, ShareSummary } from "./types.js";
 
 export class ApiError extends Error {
   constructor(
@@ -149,6 +153,29 @@ export class ApiClient {
     return this.getOrUndefined<Provenance>(
       `/api/workspaces/${enc(workspaceId)}/artifacts/${enc(target)}/why`,
     );
+  }
+
+  /** Create a public read-only link to a built artifact. */
+  createShare(
+    workspaceId: string,
+    target: string,
+    opts: { includeProvenance?: boolean; expiresInDays?: number } = {},
+  ): Promise<CreatedShare> {
+    return this.post<CreatedShare>(
+      `/api/workspaces/${enc(workspaceId)}/artifacts/${enc(target)}/share`,
+      opts,
+    );
+  }
+
+  async listShares(workspaceId: string): Promise<ShareSummary[]> {
+    const { shares } = await this.get<{ shares: ShareSummary[] }>(
+      `/api/workspaces/${enc(workspaceId)}/shares`,
+    );
+    return shares;
+  }
+
+  async revokeShare(shareId: string): Promise<void> {
+    await this.request(`/api/shares/${enc(shareId)}`, { method: "DELETE" });
   }
 
   resolveApproval(jobId: string, approvalId: string, approved: boolean): Promise<{ resolved: boolean }> {

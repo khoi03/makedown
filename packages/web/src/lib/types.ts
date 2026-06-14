@@ -110,3 +110,22 @@ export type BuildStreamEvent =
 
 /** Live build status used to badge graph nodes. */
 export type TargetRunStatus = "idle" | "building" | "built" | "reused" | "denied" | "skipped";
+
+/** A freshly created share — the token (and thus the link) is returned once. */
+export interface CreatedShare {
+  readonly id: string;
+  readonly token: string;
+  /** Server-relative path (`/s/<token>`); the client prefixes its origin. */
+  readonly path: string;
+  readonly expiresAt: string | null;
+}
+
+/** A share as listed for its author — never includes token material. */
+export interface ShareSummary {
+  readonly id: string;
+  readonly target: string;
+  readonly includeProvenance: boolean;
+  readonly createdAt: string;
+  readonly expiresAt: string | null;
+  readonly revoked: boolean;
+}

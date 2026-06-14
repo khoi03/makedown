@@ -7,7 +7,9 @@ import { useEffect, useState } from "react";
 import type { ApiClient } from "../../lib/api.js";
 import type { ArtifactView, BuildCost, Provenance } from "../../lib/types.js";
 import { formatUsd, shortHash, formatDuration, formatTokens } from "../../lib/format.js";
+import { SharePanel } from "./SharePanel.js";
 import "./inspector.css";
+import "./share-panel.css";
 
 type Tab = "artifact" | "why" | "cost";
 
@@ -82,7 +84,12 @@ function ArtifactTab(props: { api: ApiClient; workspaceId: string; target: strin
   );
   if (loading) return <Empty>Loading…</Empty>;
   if (!data) return <Empty>Not built yet. Run a build to produce this artifact.</Empty>;
-  return <pre className="inspector__artifact mono">{data.content}</pre>;
+  return (
+    <div className="inspector__artifact-wrap">
+      <pre className="inspector__artifact mono">{data.content}</pre>
+      <SharePanel api={api} workspaceId={workspaceId} target={target} />
+    </div>
+  );
 }
 
 function WhyTab(props: { api: ApiClient; workspaceId: string; target: string; generation: number }) {
