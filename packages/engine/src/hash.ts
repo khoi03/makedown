@@ -38,6 +38,12 @@ function normalizeHeader(header: RecipeHeader): Record<string, unknown> {
   return {
     inputs: [...header.inputs],
     step: header.step,
+    // The fallback chain + route are part of the target's identity: they declare
+    // which models may legitimately produce this artifact. Folding them in keeps
+    // the identity hash a pure function of the recipe spec (not the runtime model
+    // that actually answered — that lives in provenance). See SPEC.md §5/§7.
+    fallback: header.fallback ? [...header.fallback] : null,
+    route: header.route ?? null,
     system: header.system ?? null,
     cache: header.cache,
     agent: header.agent ?? null,
