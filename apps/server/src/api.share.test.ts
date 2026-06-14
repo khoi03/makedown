@@ -178,19 +178,21 @@ describe("sharing routes", () => {
     });
 
     it("rate-limits the public route", async () => {
+      // A dedicated app with a tiny limit: trip the guard deterministically in a
+      // few requests (the production default is much higher — see share-routes).
+      await app.close();
+      app = makeApp({ shareRateLimit: { max: 2, windowMs: 60_000 } });
+      await app.ready();
       await build("proj");
       const { path } = (
         await app.inject({ method: "POST", url: "/api/workspaces/proj/artifacts/summary/share" })
       ).json();
-      let limited = false;
-      for (let i = 0; i < 65; i++) {
-        const res = await app.inject({ method: "GET", url: path });
-        if (res.statusCode === 429) {
-          limited = true;
-          break;
-        }
-      }
-      expect(limited).toBe(true);
+
+      expect((await app.inject({ method: "GET", url: path })).statusCode).toBe(200);
+      expect((await app.inject({ method: "GET", url: path })).statusCode).toBe(200);
+      const third = await app.inject({ method: "GET", url: path });
+      expect(third.statusCode).toBe(429);
+      expect(third.headers["content-type"]).toMatch(/text\/html/);
     });
   });
 

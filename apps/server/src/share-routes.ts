@@ -39,6 +39,8 @@ export interface ShareRoutesDeps {
     workspaceId: string,
     action: Action,
   ) => Promise<boolean>;
+  /** Override the public-view rate limit (defaults below; tunable for ops/tests). */
+  readonly rateLimit?: { readonly max: number; readonly windowMs: number };
   /** Injectable clock for the public limiter (tests). */
   readonly now?: () => number;
 }
@@ -51,8 +53,8 @@ interface CreateShareBody {
 export function registerShareRoutes(app: FastifyInstance, deps: ShareRoutesDeps): void {
   const { sharing, store, ensureAuthorized } = deps;
   const limiter = new FixedWindowLimiter({
-    max: PUBLIC_MAX_REQUESTS,
-    windowMs: PUBLIC_WINDOW_MS,
+    max: deps.rateLimit?.max ?? PUBLIC_MAX_REQUESTS,
+    windowMs: deps.rateLimit?.windowMs ?? PUBLIC_WINDOW_MS,
     now: deps.now,
   });
 

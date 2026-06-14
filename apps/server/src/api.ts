@@ -58,6 +58,8 @@ export interface ApiDeps {
    * defaults to an in-memory store (fine for tests — main wires a durable one).
    */
   readonly sharing?: SharingService;
+  /** Override the public share-view rate limit (defaults in share-routes). */
+  readonly shareRateLimit?: { readonly max: number; readonly windowMs: number };
   /** Set the Secure attribute on the session cookie (HTTPS deployments). */
   readonly secureCookies?: boolean;
 }
@@ -160,7 +162,7 @@ export function buildApi(deps: ApiDeps): FastifyInstance {
   app.get("/api/health", async () => ({ ok: true }));
 
   registerAuthRoutes(app, { tenancy, secureCookies: deps.secureCookies ?? false });
-  registerShareRoutes(app, { sharing, store: deps.store, ensureAuthorized });
+  registerShareRoutes(app, { sharing, store: deps.store, ensureAuthorized, rateLimit: deps.shareRateLimit });
 
   app.get("/api/workspaces", async (req, reply) => {
     const all = await deps.store.list();
