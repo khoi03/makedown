@@ -95,6 +95,28 @@ output: artifacts/t.json
     expect(prov?.tokens).toEqual({ input: 2, output: 4 }); // 2 items * {in:1,out:2}
   });
 
+  it("summarizes a mixed-model map honestly (fellBack, model = declared spec)", async () => {
+    await ws.write("sources/list.json", `["a", "b"]`);
+    const doc = parseBuildDoc(MAP_DOC);
+
+    // A provider that reports a different actual model per item — as if the
+    // router fell back on some items but not others.
+    let call = 0;
+    const provider: import("@makedown/providers").Provider = {
+      id: "mixed",
+      async complete(req) {
+        const model = call++ === 0 ? "claude-opus-4-8" : "anthropic:claude-sonnet-4-6";
+        return { text: req.prompt, usage: { input: 1, output: 2 }, model };
+      },
+    };
+    await runBuild(doc, ws.ctx(provider));
+
+    const plan = await planBuild(doc, ws.ctx());
+    const prov = await new LocalCas(join(ws.dir, ".makedown")).getProvenance(plan.ids.get("titles")!);
+    expect(prov?.model).toBe("claude-opus-4-8"); // the declared spec for a mixed aggregate
+    expect(prov?.fellBack).toBe(true);
+  });
+
   it("handles an empty list with zero provider calls", async () => {
     await ws.write("sources/list.json", `[]`);
     const doc = parseBuildDoc(MAP_DOC);

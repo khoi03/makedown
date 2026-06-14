@@ -6,35 +6,26 @@
  *
  * Model syntax: `provider:model` (e.g. `openai:gpt-5`, `anthropic:claude-opus-4-8`).
  * A bare model with no known prefix uses `defaultProvider`.
+ *
+ * Fallback: when a request carries a `fallback` chain, the router tries each
+ * candidate in turn, advancing on transient failures (see fallback.ts). The
+ * model that actually produced the result is reported on `CompletionResult.model`
+ * (the full `provider:model` ref) so provenance stays honest.
  */
 import type { Provider } from "./provider.js";
 import { AnthropicProvider } from "./anthropic.js";
 import { OpenAICompatibleProvider } from "./openai.js";
+import { ProviderError } from "./errors.js";
+import { buildChain, runWithFallback } from "./fallback.js";
+import { KNOWN_PROVIDERS, parseModelRef, type ModelRef } from "./model-ref.js";
+
+export { parseModelRef, type ModelRef };
 
 export interface ProviderRouterConfig {
   /** Provider for bare model names (no `provider:` prefix). Default: "anthropic". */
   readonly defaultProvider?: string;
   readonly anthropic?: { readonly apiKey: string; readonly baseUrl?: string };
   readonly openai?: { readonly apiKey: string; readonly baseUrl?: string };
-}
-
-const KNOWN_PROVIDERS = ["anthropic", "openai"] as const;
-
-export interface ModelRef {
-  readonly provider: string;
-  readonly model: string;
-}
-
-/** Parse `provider:model`; bare strings (or unknown prefixes) use `defaultProvider`. */
-export function parseModelRef(raw: string, defaultProvider: string): ModelRef {
-  const idx = raw.indexOf(":");
-  if (idx > 0) {
-    const prefix = raw.slice(0, idx);
-    if ((KNOWN_PROVIDERS as readonly string[]).includes(prefix)) {
-      return { provider: prefix, model: raw.slice(idx + 1) };
-    }
-  }
-  return { provider: defaultProvider, model: raw };
 }
 
 /** A Provider that routes each request to the configured backend for its model. */
@@ -49,16 +40,30 @@ export function createProviderRouter(config: ProviderRouterConfig): Provider {
     let provider: Provider;
     if (id === "anthropic") {
       if (!config.anthropic) {
-        throw new Error('Provider "anthropic" is not configured — set ANTHROPIC_API_KEY');
+        // Classified as "unavailable" (retryable) so a fallback chain can skip an
+        // unconfigured provider instead of aborting the whole build.
+        throw new ProviderError(
+          'Provider "anthropic" is not configured — set ANTHROPIC_API_KEY',
+          "unavailable",
+          "anthropic",
+        );
       }
       provider = new AnthropicProvider(config.anthropic);
     } else if (id === "openai") {
       if (!config.openai) {
-        throw new Error('Provider "openai" is not configured — set OPENAI_API_KEY');
+        throw new ProviderError(
+          'Provider "openai" is not configured — set OPENAI_API_KEY',
+          "unavailable",
+          "openai",
+        );
       }
       provider = new OpenAICompatibleProvider(config.openai);
     } else {
-      throw new Error(`Unknown provider "${id}" (known: ${KNOWN_PROVIDERS.join(", ")})`);
+      throw new ProviderError(
+        `Unknown provider "${id}" (known: ${KNOWN_PROVIDERS.join(", ")})`,
+        "bad_request",
+        id,
+      );
     }
     cache.set(id, provider);
     return provider;
@@ -70,8 +75,19 @@ export function createProviderRouter(config: ProviderRouterConfig): Provider {
       if (!request.model.trim()) {
         throw new Error("No model specified for a target — set `model:` in build.md");
       }
-      const { provider, model } = parseModelRef(request.model, defaultProvider);
-      return get(provider).complete({ ...request, model });
+      const chain = buildChain(request.model, request.fallback, request.route, defaultProvider);
+      return runWithFallback(chain, async (ref) => {
+        const { provider, model } = parseModelRef(ref, defaultProvider);
+        const result = await get(provider).complete({
+          ...request,
+          model,
+          fallback: undefined,
+          route: undefined,
+        });
+        // Stamp the full `provider:model` ref as the producer, matching how the
+        // recipe expressed it — keeps provenance + analytics keys consistent.
+        return { ...result, model: ref };
+      });
     },
   };
 }

@@ -26,6 +26,21 @@ target via `provider:model` (e.g. `anthropic:claude-opus-4-8`, `openai:gpt-5`),
 with keys/base-URLs from a workspace `.env` — so one workspace can compare models
 across providers (see `examples/compare`).
 
+A target can also declare a **`fallback`** chain so a build survives a transient
+provider failure (rate-limit / overload / network) without losing the artifact:
+
+```yaml
+model: anthropic:claude-opus-4-8
+fallback: [anthropic:claude-sonnet-4-6, openai:gpt-5]
+route: cost-aware    # optional — sort the fallbacks cheapest-first
+```
+
+The router tries the primary first, advances down the chain only on transient
+errors (failing fast on bad-request/auth), and records the model that **actually**
+produced the artifact in provenance (`md why` shows a "fell back from …" note when
+it differs). The `fallback`/`route` spec is part of the identity hash, so caching
+stays deterministic regardless of which model answered (see [`SPEC.md`](./SPEC.md) §4.2).
+
 ## Step types
 
 A target's `step` decides how it computes (see [`SPEC.md`](./SPEC.md) §6):

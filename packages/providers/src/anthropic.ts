@@ -10,42 +10,36 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { CompletionRequest, CompletionResult, Provider } from "./provider.js";
 import { resolveMaxTokens } from "./params.js";
+import { ProviderError, kindFromStatus } from "./errors.js";
+import { estimateCostUsd, normalizeModelId } from "./pricing.js";
+
+// Re-exported for back-compat: pricing now lives in pricing.ts (shared with the
+// cost-aware fallback ordering), but these were originally exported from here.
+export { estimateCostUsd, normalizeModelId };
+
+/** Translate an Anthropic SDK / network failure into a classified ProviderError. */
+function toProviderError(err: unknown): ProviderError {
+  if (err instanceof ProviderError) return err;
+  const status = (err as { status?: unknown })?.status;
+  if (typeof status === "number") {
+    return new ProviderError(messageOf(err, `Anthropic request failed (${status})`), kindFromStatus(status), "anthropic", status, { cause: err });
+  }
+  // Connection/timeout/abort errors carry no status — treat as a transient timeout.
+  const name = (err as { name?: unknown })?.name;
+  if (typeof name === "string" && /connection|timeout|abort/i.test(name)) {
+    return new ProviderError(messageOf(err, "Anthropic connection error"), "timeout", "anthropic", undefined, { cause: err });
+  }
+  return new ProviderError(messageOf(err, "Anthropic request failed"), "unknown", "anthropic", undefined, { cause: err });
+}
+
+function messageOf(err: unknown, fallback: string): string {
+  const m = (err as { message?: unknown })?.message;
+  return typeof m === "string" && m.length > 0 ? m : fallback;
+}
 
 export interface AnthropicConfig {
   readonly apiKey: string;
   readonly baseUrl?: string;
-}
-
-/** USD per 1M tokens, keyed by the bare Anthropic model id. Confirmed (cached 2026-05-26). */
-const PRICING: Readonly<Record<string, { input: number; output: number }>> = {
-  "claude-opus-4-8": { input: 5, output: 25 },
-  "claude-opus-4-7": { input: 5, output: 25 },
-  "claude-opus-4-6": { input: 5, output: 25 },
-  "claude-sonnet-4-6": { input: 3, output: 15 },
-  "claude-haiku-4-5": { input: 1, output: 5 },
-};
-
-/**
- * Reduce a possibly-prefixed model id to the bare id used as a pricing key:
- * - strips a gateway path prefix:  `cc/claude-sonnet-4-6` -> `claude-sonnet-4-6`
- * - strips a Bedrock vendor dot:   `anthropic.claude-opus-4-8` -> `claude-opus-4-8`
- */
-export function normalizeModelId(model: string): string {
-  const lastSlash = model.lastIndexOf("/");
-  let id = lastSlash === -1 ? model : model.slice(lastSlash + 1);
-  if (id.startsWith("anthropic.")) id = id.slice("anthropic.".length);
-  return id;
-}
-
-/** Estimate USD cost for a known Anthropic model. Tries the exact id, then the normalized one. */
-export function estimateCostUsd(
-  model: string,
-  inputTokens: number,
-  outputTokens: number,
-): number | undefined {
-  const rate = PRICING[model] ?? PRICING[normalizeModelId(model)];
-  if (!rate) return undefined;
-  return (inputTokens * rate.input + outputTokens * rate.output) / 1_000_000;
 }
 
 export class AnthropicProvider implements Provider {
@@ -56,13 +50,21 @@ export class AnthropicProvider implements Provider {
     this.client = new Anthropic({ apiKey: config.apiKey, baseURL: config.baseUrl });
   }
 
+  private async send(request: CompletionRequest) {
+    try {
+      return await this.client.messages.create({
+        model: request.model,
+        max_tokens: resolveMaxTokens(request.params),
+        ...(request.system ? { system: request.system } : {}),
+        messages: [{ role: "user", content: request.prompt }],
+      });
+    } catch (err) {
+      throw toProviderError(err);
+    }
+  }
+
   async complete(request: CompletionRequest): Promise<CompletionResult> {
-    const message = await this.client.messages.create({
-      model: request.model,
-      max_tokens: resolveMaxTokens(request.params),
-      ...(request.system ? { system: request.system } : {}),
-      messages: [{ role: "user", content: request.prompt }],
-    });
+    const message = await this.send(request);
 
     let text = "";
     for (const block of message.content) {
@@ -73,6 +75,11 @@ export class AnthropicProvider implements Provider {
       input: message.usage.input_tokens,
       output: message.usage.output_tokens,
     };
-    return { text, usage, costUsd: estimateCostUsd(request.model, usage.input, usage.output) };
+    return {
+      text,
+      usage,
+      costUsd: estimateCostUsd(request.model, usage.input, usage.output),
+      model: request.model,
+    };
   }
 }

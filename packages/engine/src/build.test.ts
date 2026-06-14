@@ -127,6 +127,39 @@ describe("runBuild", () => {
     await expect(runBuild(doc, ctx(undefined))).rejects.toThrow(/No provider/);
   });
 
+  it("forwards the fallback chain and route policy to the provider", async () => {
+    const doc = parseBuildDoc(
+      `---\ndefaults: { model: claude-opus-4-8 }\nartifacts_dir: artifacts\n---\n## target: summary\n\`\`\`yaml\ninputs: [sources/notes.md]\nstep: chat\nfallback: [anthropic:claude-sonnet-4-6]\nroute: cost-aware\n\`\`\`\nSummary of {{sources/notes.md}}.\n`,
+    );
+    const provider = new FakeProvider();
+    await runBuild(doc, ctx(provider));
+    expect(provider.calls[0]!.fallback).toEqual(["anthropic:claude-sonnet-4-6"]);
+    expect(provider.calls[0]!.route).toBe("cost-aware");
+  });
+
+  it("records the model that actually produced the artifact, marking fellBack", async () => {
+    class FallbackProvider implements Provider {
+      readonly id = "fake";
+      async complete(req: CompletionRequest): Promise<CompletionResult> {
+        // Simulate the router having fallen back to a different model.
+        return {
+          text: `OUT(${req.prompt})`,
+          usage: { input: 1, output: 2 },
+          costUsd: 0.01,
+          model: "anthropic:claude-sonnet-4-6",
+        };
+      }
+    }
+    const doc = parseBuildDoc(DOC);
+    await runBuild(doc, ctx(new FallbackProvider()));
+
+    const plan = await planBuild(doc, ctx());
+    const prov = await new LocalCas(join(dir, ".makedown")).getProvenance(plan.ids.get("summary")!);
+    expect(prov?.model).toBe("anthropic:claude-sonnet-4-6");
+    expect(prov?.requestedModel).toBe("claude-opus-4-8");
+    expect(prov?.fellBack).toBe(true);
+  });
+
   it("passes a rendered system prompt to the provider", async () => {
     const doc = parseBuildDoc(
       `---\ndefaults: { model: claude-opus-4-8, system: "You are terse." }\nartifacts_dir: artifacts\n---\n## target: summary\n\`\`\`yaml\ninputs: [sources/notes.md]\nstep: chat\n\`\`\`\nSummary of {{sources/notes.md}}.\n`,

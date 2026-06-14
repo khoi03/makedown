@@ -85,4 +85,40 @@ describe("OpenAICompatibleProvider", () => {
       /401.*invalid key/,
     );
   });
+
+  it("reports the model that produced the result", async () => {
+    fetchMock.mockResolvedValue(okResponse({ choices: [{ message: { content: "x" } }], usage: {} }));
+    const provider = new OpenAICompatibleProvider({ apiKey: "k" });
+    const result = await provider.complete({ model: "x/y", prompt: "p", params: {} });
+    expect(result.model).toBe("x/y");
+  });
+
+  it.each([
+    [429, "rate_limit"],
+    [503, "overload"],
+    [500, "server"],
+    [400, "bad_request"],
+    [403, "auth"],
+    [404, "unavailable"],
+  ] as const)("maps a %i response to a ProviderError(%s)", async (status, kind) => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status,
+      statusText: "err",
+      text: async () => "detail",
+      json: async () => ({}),
+    });
+    const provider = new OpenAICompatibleProvider({ apiKey: "k" });
+    await expect(
+      provider.complete({ model: "m", prompt: "p", params: {} }),
+    ).rejects.toMatchObject({ name: "ProviderError", kind, provider: "openai", status });
+  });
+
+  it("maps a network failure to a retryable timeout ProviderError", async () => {
+    fetchMock.mockRejectedValue(new TypeError("fetch failed"));
+    const provider = new OpenAICompatibleProvider({ apiKey: "k" });
+    await expect(
+      provider.complete({ model: "m", prompt: "p", params: {} }),
+    ).rejects.toMatchObject({ name: "ProviderError", kind: "timeout", provider: "openai" });
+  });
 });

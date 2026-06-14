@@ -60,4 +60,16 @@ describe("computeIdentityHash", () => {
       computeIdentityHash({ ...base, header: header({ output: "artifacts/other.md" }) }),
     );
   });
+  it("changes when a fallback chain is declared (part of the target spec)", () => {
+    expect(computeIdentityHash(base)).not.toBe(
+      computeIdentityHash({ ...base, header: header({ fallback: ["claude-haiku-4-5"] }) }),
+    );
+  });
+  it("changes when the route policy changes", () => {
+    const strict = header({ fallback: ["claude-haiku-4-5"] });
+    const costAware = header({ fallback: ["claude-haiku-4-5"], route: "cost-aware" });
+    expect(computeIdentityHash({ ...base, header: strict })).not.toBe(
+      computeIdentityHash({ ...base, header: costAware }),
+    );
+  });
 });

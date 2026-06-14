@@ -291,6 +291,42 @@ async function executeTarget(
   }
 }
 
+/**
+ * Reconcile the requested model with the one the provider actually used (after
+ * any fallback) into honest provenance fields. When they match, only `model` is
+ * set; when a fallback changed the model, `requestedModel` + `fellBack` record
+ * what happened so a build never misattributes which model made an artifact.
+ */
+function reconcileModel(
+  requested: string | undefined,
+  actual: string | undefined,
+): { model?: string; requestedModel?: string; fellBack?: boolean } {
+  const model = actual ?? requested;
+  if (actual !== undefined && requested !== undefined && actual !== requested) {
+    return { model, requestedModel: requested, fellBack: true };
+  }
+  return { model };
+}
+
+/**
+ * Aggregate provenance model for a `map` step, which makes one artifact from N
+ * per-item calls. If every item used the same model, record it (with fallback
+ * markers via reconcileModel). If items diverged across models, fall back to the
+ * declared spec for `model` and flag `fellBack` when any item used a different
+ * one — an honest, if coarse, summary of a mixed aggregate.
+ */
+function mapAggregateModel(
+  requested: string | undefined,
+  actualModels: ReadonlySet<string>,
+): { model?: string; requestedModel?: string; fellBack?: boolean } {
+  if (actualModels.size <= 1) {
+    const [only] = actualModels;
+    return reconcileModel(requested, only);
+  }
+  const fellBack = [...actualModels].some((m) => m !== requested);
+  return fellBack ? { model: requested, fellBack: true } : { model: requested };
+}
+
 /** Run a single model inference (`chat`/`eval`) and record provenance. */
 async function executeModelStep(
   target: TargetBlock,
@@ -311,6 +347,8 @@ async function executeModelStep(
   const start = Date.now();
   const result = await ctx.provider.complete({
     model: target.header.model ?? "",
+    fallback: target.header.fallback,
+    route: target.header.route,
     system,
     prompt,
     params: target.header.params,
@@ -333,7 +371,7 @@ async function executeModelStep(
     id: tp.id,
     output: target.header.output,
     step: target.header.step,
-    model: target.header.model,
+    ...reconcileModel(target.header.model, result.model),
     params: target.header.params,
     inputs: tp.inputs,
     promptHash: sha256(prompt),
@@ -375,6 +413,8 @@ async function executeStochasticModelStep(
     const start = Date.now();
     const result = await ctx.provider.complete({
       model: target.header.model ?? "",
+      fallback: target.header.fallback,
+      route: target.header.route,
       system,
       prompt,
       params: target.header.params,
@@ -385,7 +425,7 @@ async function executeStochasticModelStep(
       id: tp.id,
       output: target.header.output,
       step: target.header.step,
-      model: target.header.model,
+      ...reconcileModel(target.header.model, result.model),
       params: target.header.params,
       inputs: tp.inputs,
       promptHash: sha256(prompt),
@@ -465,6 +505,7 @@ async function executeMap(
   }
 
   const results: string[] = [];
+  const actualModels = new Set<string>();
   let input = 0;
   let output = 0;
   let costUsd = 0;
@@ -478,11 +519,14 @@ async function executeMap(
       : undefined;
     const result = await ctx.provider.complete({
       model: target.header.model ?? "",
+      fallback: target.header.fallback,
+      route: target.header.route,
       system,
       prompt,
       params: target.header.params,
     });
     results.push(result.text);
+    if (result.model !== undefined) actualModels.add(result.model);
     input += result.usage.input;
     output += result.usage.output;
     costUsd += result.costUsd ?? 0;
@@ -498,7 +542,7 @@ async function executeMap(
     id: tp.id,
     output: target.header.output,
     step: "map",
-    model: target.header.model,
+    ...mapAggregateModel(target.header.model, actualModels),
     params: target.header.params,
     inputs: tp.inputs,
     promptHash: sha256(target.body),

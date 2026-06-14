@@ -12,6 +12,13 @@ export type Sandbox = "worktree" | "container" | "none";
 /** Whether an artifact must be human-approved before downstream consumption. */
 export type Approval = "none" | "required";
 
+/**
+ * How the provider router orders a target's fallback candidates. `strict`
+ * tries them in declared order; `cost-aware` keeps the primary first but sorts
+ * the fallback alternatives cheapest-first. See SPEC.md §7.
+ */
+export type RoutePolicy = "strict" | "cost-aware";
+
 /** Cache / determinism policy for a target. See SPEC.md §7. */
 export type CachePolicy =
   | { readonly kind: "deterministic" }
@@ -26,6 +33,13 @@ export interface RecipeHeader {
   readonly inputs: readonly string[];
   readonly step: StepType;
   readonly model?: string;
+  /**
+   * Ordered fallback models (each a `provider:model` ref) tried when the primary
+   * fails transiently. Folds into the identity hash (part of the target's spec).
+   */
+  readonly fallback?: readonly string[];
+  /** How the router orders the fallback candidates. Default: "strict". */
+  readonly route?: RoutePolicy;
   /** System prompt for the model. May contain `{{ref}}` interpolations. */
   readonly system?: string;
   readonly params: Readonly<Record<string, unknown>>;
@@ -52,6 +66,8 @@ export interface FrontMatter {
   readonly version?: string;
   readonly defaults?: {
     readonly model?: string;
+    readonly fallback?: readonly string[];
+    readonly route?: RoutePolicy;
     readonly system?: string;
     readonly params?: Readonly<Record<string, unknown>>;
     readonly cache?: CachePolicy;
@@ -91,7 +107,12 @@ export interface Provenance {
   readonly id: string;
   readonly output: string;
   readonly step: StepType;
+  /** The model that actually produced this artifact (after any fallback). */
   readonly model?: string;
+  /** The model the recipe requested, set only when a fallback changed it. */
+  readonly requestedModel?: string;
+  /** True when the router fell back from `requestedModel` to `model`. */
+  readonly fellBack?: boolean;
   readonly params: Readonly<Record<string, unknown>>;
   readonly inputs: readonly ResolvedInput[];
   readonly promptHash: string;

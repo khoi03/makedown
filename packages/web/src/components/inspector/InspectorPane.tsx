@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import type { ApiClient } from "../../lib/api.js";
 import type { ArtifactView, BuildCost, Provenance } from "../../lib/types.js";
 import { formatUsd, shortHash, formatDuration, formatTokens } from "../../lib/format.js";
+import { fallbackNote } from "../../lib/provenance.js";
 import { SharePanel } from "./SharePanel.js";
 import "./inspector.css";
 import "./share-panel.css";
@@ -104,7 +105,7 @@ function WhyTab(props: { api: ApiClient; workspaceId: string; target: string; ge
     <dl className="provenance">
       <Row k="Target" v={data.target} />
       <Row k="Step" v={data.step} />
-      {data.model && <Row k="Model" v={data.model} />}
+      {data.model && <ModelRow model={data.model} note={fallbackNote(data)} />}
       <Row k="Identity" v={shortHash(data.id)} mono />
       <Row k="Tokens" v={formatTokens(data.tokens)} />
       <Row k="Cost" v={data.costUsd !== undefined ? formatUsd(data.costUsd) : "—"} />
@@ -167,6 +168,19 @@ function Row({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
     <div className="provenance__row">
       <span className="provenance__k">{k}</span>
       <span className={mono ? "mono" : undefined}>{v}</span>
+    </div>
+  );
+}
+
+/** The Model row, with a fallback chip when the build fell back to a different model. */
+function ModelRow({ model, note }: { model: string; note?: string }) {
+  return (
+    <div className="provenance__row">
+      <span className="provenance__k">Model</span>
+      <span className="provenance__model">
+        {model}
+        {note && <span className="provenance__fallback" title={note}>{note}</span>}
+      </span>
     </div>
   );
 }
