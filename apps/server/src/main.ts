@@ -99,14 +99,20 @@ export function createServer(opts: ServerOptions): AssembledServer {
     const dir = store.resolve(id);
     // Load the doc FULLY and SYNCHRONOUSLY before it is exposed to any room or
     // client. The previous fire-and-forget async load let a reconnecting client
-    // sync against an empty doc and then race the restore + disk reconcile,
-    // interleaving ops into scrambled text on reload. Restore the CRDT state
-    // first (stable client ids, idempotent reconnects), THEN reconcile to the
-    // on-disk text — a no-op when they agree, and safe even when they differ
-    // because no client is attached yet, so the replace happens in isolation
-    // rather than merging concurrent ops.
-    restoreDocStateSync(doc, dir);
-    applySnapshot(doc, readWorkspaceFromDiskSync(dir));
+    // sync against an empty doc and then race the load, scrambling text on reload.
+    //
+    // The saved CRDT state is AUTHORITATIVE: `flush` always writes ydoc.bin and
+    // build.md together, so a restored doc already holds the latest text *and* a
+    // single stable history (idempotent reconnects). We deliberately do NOT
+    // reconcile to disk after a successful restore — that reconcile is a
+    // `replaceText` (delete+insert), which both lets a stale/corrupt build.md
+    // override the good state and seeds divergent ops that interleave into
+    // scrambled text. Only when there is no saved state (a true first open) do we
+    // seed from disk. Out-of-band disk/branch changes are applied to the live doc
+    // explicitly via switchBranch / the reload hook, not silently at open.
+    if (!restoreDocStateSync(doc, dir)) {
+      applySnapshot(doc, readWorkspaceFromDiskSync(dir));
+    }
     docs.set(id, doc);
     // Attach persistence only now, so the initial load is not echoed as an edit.
     persistences.set(id, new WorkspacePersistence(doc, dir, { author: opts.author }));
