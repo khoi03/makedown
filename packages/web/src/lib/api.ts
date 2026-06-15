@@ -46,6 +46,16 @@ export interface AuthSession {
   readonly org: Org;
 }
 
+/** The result of importing a file into a workspace as a Markdown source. */
+export interface ImportedSource {
+  /** Workspace-relative POSIX path of the written source (e.g. `sources/report.md`). */
+  readonly path: string;
+  /** True when served from the conversion cache (no reconversion happened). */
+  readonly cached: boolean;
+  /** Length of the converted Markdown, in characters. */
+  readonly chars: number;
+}
+
 type FetchFn = typeof fetch;
 
 export class ApiClient {
@@ -154,6 +164,24 @@ export class ApiClient {
   async startBuild(workspaceId: string): Promise<string> {
     const { jobId } = await this.post<{ jobId: string }>(`/api/workspaces/${enc(workspaceId)}/build`);
     return jobId;
+  }
+
+  /**
+   * Convert an uploaded non-Markdown file (base64) to a Markdown source in the
+   * workspace. Resolves with the written source path (relative, POSIX) and
+   * whether it was served from the conversion cache.
+   */
+  importSource(
+    workspaceId: string,
+    fileName: string,
+    contentBase64: string,
+    out?: string,
+  ): Promise<ImportedSource> {
+    return this.post<ImportedSource>(`/api/workspaces/${enc(workspaceId)}/import`, {
+      fileName,
+      contentBase64,
+      ...(out ? { out } : {}),
+    });
   }
 
   /** Returns the artifact, or `undefined` when it has not been built (404). */
