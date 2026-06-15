@@ -154,3 +154,20 @@ function tail(stderr: string): string {
 function isNotFound(err: unknown): boolean {
   return (err as { code?: string } | null)?.code === "ENOENT";
 }
+
+/**
+ * Resolve a MarkItDown command override from the environment, suitable for
+ * {@link MarkItDownOptions.command}. Set `MAKEDOWN_MARKITDOWN_CMD` when the
+ * `markitdown` shim isn't on PATH — most commonly `python -m markitdown` (e.g.
+ * after a `pip install --user` on Windows, where the Scripts dir is often off
+ * PATH). A multi-token value splits into an argv array so nothing is
+ * shell-interpreted; an exe path with spaces should be put on PATH instead.
+ */
+export function markitdownCommandFromEnv(
+  env: Record<string, string | undefined> = process.env,
+): string | string[] | undefined {
+  const raw = env["MAKEDOWN_MARKITDOWN_CMD"]?.trim();
+  if (!raw) return undefined;
+  const parts = raw.split(/\s+/);
+  return parts.length === 1 ? parts[0] : parts;
+}

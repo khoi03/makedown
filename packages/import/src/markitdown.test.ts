@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MarkItDownImporter } from "./markitdown.js";
+import { MarkItDownImporter, markitdownCommandFromEnv } from "./markitdown.js";
 import { ImporterError, type ConvertExec, type ConvertExecResult } from "./importer.js";
 
 /** Build a fake exec that records its invocation and returns a canned result. */
@@ -155,5 +155,24 @@ describe("MarkItDownImporter.version", () => {
     const { exec } = fakeExec({ stdout: "markitdown 0.1.6", code: 0 });
     const importer = new MarkItDownImporter({ exec });
     expect(await importer.isAvailable()).toBe(true);
+  });
+});
+
+describe("markitdownCommandFromEnv", () => {
+  it("returns undefined when the override is unset or blank", () => {
+    expect(markitdownCommandFromEnv({})).toBeUndefined();
+    expect(markitdownCommandFromEnv({ MAKEDOWN_MARKITDOWN_CMD: "   " })).toBeUndefined();
+  });
+
+  it("returns a single string for a one-token command", () => {
+    expect(markitdownCommandFromEnv({ MAKEDOWN_MARKITDOWN_CMD: "markitdown" })).toBe("markitdown");
+  });
+
+  it("splits a multi-token command into an argv array (e.g. python -m markitdown)", () => {
+    expect(markitdownCommandFromEnv({ MAKEDOWN_MARKITDOWN_CMD: "python -m markitdown" })).toEqual([
+      "python",
+      "-m",
+      "markitdown",
+    ]);
   });
 });

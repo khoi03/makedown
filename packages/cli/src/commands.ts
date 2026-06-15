@@ -15,8 +15,13 @@ import {
   FileImportCache,
   importWithCache,
   ImporterError,
+  markitdownCommandFromEnv,
   type Importer,
 } from "@makedown/import";
+
+// Re-exported for back-compat: the helper now lives in @makedown/import so the
+// server can reuse it too. Tests import it from here.
+export { markitdownCommandFromEnv };
 import { cachePolicyToString, type BuildDoc } from "@makedown/shared";
 import { loadDoc, makeContext, resolveDir, hasAnyProvider, BUILD_FILE } from "./workspace.js";
 import { loadEnv } from "./env.js";
@@ -192,22 +197,6 @@ export interface ImportOptions {
   readonly importer?: Importer;
 }
 
-/**
- * Resolve a MarkItDown command override from the environment. Set
- * `MAKEDOWN_MARKITDOWN_CMD` when the `markitdown` shim isn't on PATH — most
- * commonly `python -m markitdown` (e.g. after a `pip install --user` on Windows,
- * where the Scripts dir is often off PATH). A multi-token value is split into an
- * argv array so nothing is shell-interpreted; an exe path with spaces should be
- * put on PATH instead.
- */
-export function markitdownCommandFromEnv(
-  env: NodeJS.ProcessEnv = process.env,
-): string | string[] | undefined {
-  const raw = env["MAKEDOWN_MARKITDOWN_CMD"]?.trim();
-  if (!raw) return undefined;
-  const parts = raw.split(/\s+/);
-  return parts.length === 1 ? parts[0] : parts;
-}
 
 /**
  * `md import <file>` — convert a non-Markdown source (PDF, DOCX, PPTX, XLSX,

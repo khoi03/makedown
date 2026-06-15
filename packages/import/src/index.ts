@@ -11,6 +11,7 @@ export {
 } from "./importer.js";
 export {
   MarkItDownImporter,
+  markitdownCommandFromEnv,
   DEFAULT_MARKITDOWN_COMMAND,
   DEFAULT_IMPORT_TIMEOUT_MS,
   DEFAULT_IMPORT_MAX_OUTPUT_BYTES,
