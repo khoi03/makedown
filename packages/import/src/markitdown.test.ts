@@ -139,6 +139,30 @@ describe("MarkItDownImporter.version", () => {
     expect(await importer.version()).toBe("unknown");
   });
 
+  it("memoizes a resolved version so repeat calls don't re-spawn the probe", async () => {
+    const { exec, calls } = fakeExec({ stdout: "markitdown 0.1.6", code: 0 });
+    const importer = new MarkItDownImporter({ exec });
+
+    await importer.version();
+    await importer.version();
+    await importer.isAvailable();
+
+    expect(calls).toHaveLength(1); // one --version probe total
+  });
+
+  it("does not cache a failed probe (so a later install can recover without restart)", async () => {
+    let attempt = 0;
+    const exec: ConvertExec = async () => {
+      attempt += 1;
+      if (attempt === 1) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      return { stdout: "markitdown 0.1.6", stderr: "", code: 0, signal: null, timedOut: false };
+    };
+    const importer = new MarkItDownImporter({ exec });
+
+    await expect(importer.version()).rejects.toMatchObject({ kind: "not_installed" });
+    expect(await importer.version()).toBe("0.1.6"); // retried, succeeded
+  });
+
   it("reports not_installed when the version probe can't spawn", async () => {
     const err = Object.assign(new Error("spawn ENOENT"), { code: "ENOENT" });
     const importer = new MarkItDownImporter({ exec: throwingExec(err) });

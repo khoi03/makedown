@@ -51,6 +51,8 @@ export class MarkItDownImporter implements Importer {
   private readonly exec: ConvertExec;
   private readonly timeoutMs: number;
   private readonly maxOutputBytes: number;
+  /** Memoized successful version probe (re-resolved if a probe ever fails). */
+  private cachedVersion?: string;
 
   constructor(opts: MarkItDownOptions = {}) {
     const command = opts.command ?? DEFAULT_MARKITDOWN_COMMAND;
@@ -63,10 +65,17 @@ export class MarkItDownImporter implements Importer {
   }
 
   async version(): Promise<string> {
+    // Memoized: the version feeds the conversion cache key and is stable for an
+    // installed tool, so a long-lived importer (e.g. the server's singleton)
+    // probes once instead of spawning `--version` on every import. A failed
+    // probe is NOT cached, so installing the tool later recovers without a
+    // restart; an in-place tool upgrade is picked up on the next process start.
+    if (this.cachedVersion !== undefined) return this.cachedVersion;
     const result = await this.run(["--version"]);
     // e.g. "markitdown 0.1.6" → "0.1.6"; fall back to a stable sentinel.
     const match = result.stdout.match(/(\d+\.\d+\.\d+(?:[.\w-]*)?)/);
-    return match?.[1] ?? "unknown";
+    this.cachedVersion = match?.[1] ?? "unknown";
+    return this.cachedVersion;
   }
 
   async isAvailable(): Promise<boolean> {
