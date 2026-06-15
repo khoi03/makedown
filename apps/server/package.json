@@ -17,8 +17,8 @@
     "build": "tsc -b",
     "typecheck": "tsc --noEmit",
     "clean": "tsc -b --clean",
-    "start": "node dist/main.js",
-    "dev": "node --watch dist/main.js",
+    "start": "tsc -b && node dist/main.js",
+    "dev": "tsc -b && node --watch dist/main.js",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
