@@ -93,6 +93,14 @@ same bytes is served from cache with no second conversion. The output is written
 *inside* the workspace (so it stays confined there); the named input is read
 as-is. [`examples/import`](./examples/import) is a runnable, key-free tour.
 
+In the **collaborative workbench**, the same capability is an **"Import file"**
+button in the `build.md` pane: pick a file, and the converted source lands in the
+workspace (live in the doc + on disk) with the `{{sources/…}}` reference shown to
+paste. The server runs MarkItDown the same way, so it must be installed on the
+**server host** (`pip install 'markitdown[all]'`, or set `MAKEDOWN_MARKITDOWN_CMD=python -m markitdown`);
+uploads are size-capped and writing the source requires the `member` role when
+auth is enabled.
+
 > **Security — `transform`/`agent` run code.** Every declared path (inputs,
 > outputs, scripts) is confined to the workspace — `..`, absolute paths, and
 > escaping symlinks are rejected. A `transform`'s isolation is set by its
