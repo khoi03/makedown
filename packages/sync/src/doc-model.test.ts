@@ -96,3 +96,76 @@ describe("workspace doc model", () => {
     expect(loadSnapshot(doc).sources["sources/new.md"]).toBe("fresh");
   });
 });
+
+/**
+ * Reconciling a *live* doc to disk (a branch switch / reload while clients are
+ * connected) must touch only the bytes that actually changed. A blunt
+ * delete-all + insert-all churns the whole Y.Text, which interleaves with
+ * concurrent client edits (scrambling text) and needlessly destroys cursors.
+ */
+describe("applySnapshot minimal reconcile", () => {
+  it("touches only the changed span — a 1-line edit does not churn the whole doc", () => {
+    const doc = new Y.Doc();
+    const body = "x".repeat(5000); // a big, unchanged middle/tail
+    applySnapshot(doc, { buildMd: `head\n${body}\ntail`, sources: {} });
+
+    let updateBytes = 0;
+    const onUpdate = (u: Uint8Array): void => {
+      updateBytes += u.length;
+    };
+    doc.on("update", onUpdate);
+    // Only "head" -> "HEAD" changes; the 5000-char body + tail are identical.
+    applySnapshot(doc, { buildMd: `HEAD\n${body}\ntail`, sources: {} });
+    doc.off("update", onUpdate);
+
+    expect(getBuildText(doc).toString()).toBe(`HEAD\n${body}\ntail`);
+    // A whole-doc delete+insert would re-emit the 5000-char body (>5000 bytes).
+    expect(updateBytes).toBeLessThan(200);
+  });
+
+  it("does not interleave with a concurrent client edit outside the changed region", () => {
+    const server = new Y.Doc();
+    const client = new Y.Doc();
+    applySnapshot(server, { buildMd: "## t\nmodel: aaa\nfooter\n", sources: {} });
+    Y.applyUpdate(client, Y.encodeStateAsUpdate(server)); // client in sync
+
+    // Client edits the footer (outside the model line) — not yet synced.
+    const footerAt = "## t\nmodel: aaa\nfooter".length;
+    getBuildText(client).insert(footerAt, "X"); // -> "...footerX\n"
+
+    // Server reconciles to a new branch that only changes the model line.
+    applySnapshot(server, { buildMd: "## t\nmodel: bbb\nfooter\n", sources: {} });
+
+    // Exchange both directions.
+    Y.applyUpdate(client, Y.encodeStateAsUpdate(server, Y.encodeStateVector(client)));
+    Y.applyUpdate(server, Y.encodeStateAsUpdate(client, Y.encodeStateVector(server)));
+
+    expect(loadSnapshot(server)).toEqual(loadSnapshot(client));
+    // Clean merge: server's model change AND the client's footer edit, no scramble.
+    expect(getBuildText(server).toString()).toBe("## t\nmodel: bbb\nfooterX\n");
+  });
+
+  it("reconciles to exactly the target content across prefix/suffix/middle/edge cases", () => {
+    const cases: ReadonlyArray<readonly [string, string]> = [
+      ["abcXYZ", "ABCXYZ"], // prefix change
+      ["abcXYZ", "abcDEF"], // suffix change
+      ["abcMIDxyz", "abcNEWERxyz"], // middle change (grows)
+      ["abcMIDDLExyz", "abcNxyz"], // middle change (shrinks)
+      ["abcxyz", "abcINSxyz"], // pure insertion
+      ["abcDELxyz", "abcxyz"], // pure deletion
+      ["abc", "xyz"], // full change
+      ["", "hello"], // empty -> content
+      ["hello", ""], // content -> empty
+      ["same", "same"], // identical (no-op)
+      ["aaaa", "aa"], // repeated chars, prefix+suffix would overlap
+      ["aaa", "aaaaa"], // repeated chars, growth
+      ["PRE-longmiddle-SUF", "PRE-x-SUF"], // common prefix AND suffix
+    ];
+    for (const [from, to] of cases) {
+      const doc = new Y.Doc();
+      applySnapshot(doc, { buildMd: from, sources: {} });
+      applySnapshot(doc, { buildMd: to, sources: {} });
+      expect(getBuildText(doc).toString()).toBe(to);
+    }
+  });
+});

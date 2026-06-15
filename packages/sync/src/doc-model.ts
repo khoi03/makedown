@@ -83,9 +83,38 @@ export function applySnapshot(doc: Y.Doc, snapshot: WorkspaceSnapshot): void {
   });
 }
 
-/** Replace a Y.Text's content only if it differs — minimizes CRDT churn. */
+/**
+ * Reconcile a Y.Text to `content`, mutating only the span that actually changed.
+ *
+ * Instead of a blunt delete-all + insert-all, trim the common prefix and suffix
+ * and replace just the differing middle. On a *live* doc (a branch switch /
+ * reload while clients are connected) this matters a lot: churning the whole
+ * Y.Text interleaves with concurrent client edits (scrambling text) and destroys
+ * every collaborator's cursor. Touching only the changed middle keeps the
+ * unchanged head/tail items — and the cursors anchored to them — intact, and
+ * shrinks the interleave surface to just the region that genuinely changed.
+ */
 function replaceText(text: Y.Text, content: string): void {
-  if (text.toString() === content) return;
-  text.delete(0, text.length);
-  text.insert(0, content);
+  const current = text.toString();
+  if (current === content) return;
+
+  const maxPrefix = Math.min(current.length, content.length);
+  let prefix = 0;
+  while (prefix < maxPrefix && current[prefix] === content[prefix]) prefix++;
+
+  // Longest common suffix, clamped so it never overlaps the matched prefix in
+  // either string (avoids double-counting shared chars, e.g. "aaaa" -> "aa").
+  const maxSuffix = Math.min(current.length - prefix, content.length - prefix);
+  let suffix = 0;
+  while (
+    suffix < maxSuffix &&
+    current[current.length - 1 - suffix] === content[content.length - 1 - suffix]
+  ) {
+    suffix++;
+  }
+
+  const removeCount = current.length - prefix - suffix;
+  if (removeCount > 0) text.delete(prefix, removeCount);
+  const inserted = content.slice(prefix, content.length - suffix);
+  if (inserted.length > 0) text.insert(prefix, inserted);
 }
