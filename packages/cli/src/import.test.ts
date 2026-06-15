@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Importer, ImportRequest, ImportResult } from "@makedown/import";
 import { ImporterError } from "@makedown/import";
-import { cmdImport } from "./commands.js";
+import { cmdImport, markitdownCommandFromEnv } from "./commands.js";
 
 /** A fake importer that records conversions and returns canned markdown. */
 class FakeImporter implements Importer {
@@ -126,5 +126,25 @@ describe("cmdImport", () => {
 
     expect(errors.join("\n")).toMatch(/workspace/i);
     expect(process.exitCode).toBe(1);
+  });
+
+});
+
+describe("markitdownCommandFromEnv", () => {
+  it("returns undefined when the override is unset or blank", () => {
+    expect(markitdownCommandFromEnv({})).toBeUndefined();
+    expect(markitdownCommandFromEnv({ MAKEDOWN_MARKITDOWN_CMD: "   " })).toBeUndefined();
+  });
+
+  it("returns a single string for a one-token command", () => {
+    expect(markitdownCommandFromEnv({ MAKEDOWN_MARKITDOWN_CMD: "markitdown" })).toBe("markitdown");
+  });
+
+  it("splits a multi-token command into an argv array (e.g. python -m markitdown)", () => {
+    expect(markitdownCommandFromEnv({ MAKEDOWN_MARKITDOWN_CMD: "python -m markitdown" })).toEqual([
+      "python",
+      "-m",
+      "markitdown",
+    ]);
   });
 });

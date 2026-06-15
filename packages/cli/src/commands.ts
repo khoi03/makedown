@@ -193,6 +193,23 @@ export interface ImportOptions {
 }
 
 /**
+ * Resolve a MarkItDown command override from the environment. Set
+ * `MAKEDOWN_MARKITDOWN_CMD` when the `markitdown` shim isn't on PATH — most
+ * commonly `python -m markitdown` (e.g. after a `pip install --user` on Windows,
+ * where the Scripts dir is often off PATH). A multi-token value is split into an
+ * argv array so nothing is shell-interpreted; an exe path with spaces should be
+ * put on PATH instead.
+ */
+export function markitdownCommandFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): string | string[] | undefined {
+  const raw = env["MAKEDOWN_MARKITDOWN_CMD"]?.trim();
+  if (!raw) return undefined;
+  const parts = raw.split(/\s+/);
+  return parts.length === 1 ? parts[0] : parts;
+}
+
+/**
  * `md import <file>` — convert a non-Markdown source (PDF, DOCX, PPTX, XLSX,
  * HTML, …) to Markdown via MarkItDown and write it into the workspace, where it
  * becomes a normal hashable source referenceable as `{{sources/…}}`.
@@ -228,7 +245,7 @@ export async function cmdImport(file: string, opts: ImportOptions = {}): Promise
     throw err;
   }
 
-  const importer = opts.importer ?? new MarkItDownImporter();
+  const importer = opts.importer ?? new MarkItDownImporter({ command: markitdownCommandFromEnv() });
   const cache = new FileImportCache(join(dir, ".makedown", "imports"));
   const extensionHint = extname(inputPath) || undefined;
 

@@ -3,12 +3,13 @@ import { MarkItDownImporter } from "./markitdown.js";
 import { ImporterError, type ConvertExec, type ConvertExecResult } from "./importer.js";
 
 /** Build a fake exec that records its invocation and returns a canned result. */
-function fakeExec(
-  result: Partial<ConvertExecResult>,
-): { exec: ConvertExec; calls: Array<{ command: string; args: readonly string[] }> } {
-  const calls: Array<{ command: string; args: readonly string[] }> = [];
-  const exec: ConvertExec = async (command, args) => {
-    calls.push({ command, args });
+function fakeExec(result: Partial<ConvertExecResult>): {
+  exec: ConvertExec;
+  calls: Array<{ command: string; args: readonly string[]; env?: NodeJS.ProcessEnv }>;
+} {
+  const calls: Array<{ command: string; args: readonly string[]; env?: NodeJS.ProcessEnv }> = [];
+  const exec: ConvertExec = async (command, args, opts) => {
+    calls.push({ command, args, env: opts.env });
     return { stdout: "", stderr: "", code: 0, signal: null, timedOut: false, ...result };
   };
   return { exec, calls };
@@ -30,6 +31,16 @@ describe("MarkItDownImporter.convert", () => {
 
     expect(res.markdown).toBe("# Title\n\nbody");
     expect(res.producedBy).toBe("markitdown");
+  });
+
+  it("forces UTF-8 output so non-ASCII (e.g. em dashes) survive the Windows codepage", async () => {
+    const { exec, calls } = fakeExec({ stdout: "ok" });
+    const importer = new MarkItDownImporter({ exec });
+
+    await importer.convert({ path: "/abs/x.html" });
+
+    expect(calls[0]?.env?.["PYTHONUTF8"]).toBe("1");
+    expect(calls[0]?.env?.["PYTHONIOENCODING"]).toBe("utf-8");
   });
 
   it("passes the file path and an extension hint as argv (no shell string)", async () => {

@@ -114,6 +114,11 @@ export class MarkItDownImporter implements Importer {
       return await this.exec(this.exe, [...this.leadArgs, ...args], {
         timeoutMs: this.timeoutMs,
         maxOutputBytes: this.maxOutputBytes,
+        // Force UTF-8 on the child so non-ASCII output isn't mangled by the host
+        // console codepage (MarkItDown writes stdout with the locale encoding +
+        // errors='replace', which would turn e.g. an em dash into U+FFFD on
+        // Windows). We capture stdout as UTF-8, so the producer must emit UTF-8.
+        env: { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" },
       });
     } catch (err) {
       if (isNotFound(err)) {

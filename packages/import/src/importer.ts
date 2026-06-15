@@ -86,6 +86,8 @@ export interface ConvertExecResult {
 export interface ConvertExecOptions {
   readonly timeoutMs: number;
   readonly maxOutputBytes: number;
+  /** Environment for the child process. Defaults to the parent's environment. */
+  readonly env?: NodeJS.ProcessEnv;
 }
 
 /**
@@ -113,6 +115,7 @@ export const defaultConvertExec: ConvertExec = (command, args, opts) => {
   return new Promise<ConvertExecResult>((resolve, reject) => {
     const child = spawn(command, [...args], {
       stdio: ["ignore", "pipe", "pipe"],
+      env: opts.env,
     });
 
     const stdoutChunks: Buffer[] = [];
