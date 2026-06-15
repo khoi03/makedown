@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, it, expect } from "vitest";
-import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, rm, writeFile, mkdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
@@ -7,8 +7,13 @@ import { promisify } from "node:util";
 import { WebSocket } from "ws";
 import * as Y from "yjs";
 import { Awareness } from "y-protocols/awareness";
-import { encodeSyncStep1, readMessage, type SyncConnection } from "@makedown/sync";
-import { start, parseRateLimitPerMinute, type RunningServer } from "./main.js";
+import {
+  encodeSyncStep1,
+  readMessage,
+  getBuildText,
+  type SyncConnection,
+} from "@makedown/sync";
+import { start, createServer, parseRateLimitPerMinute, type RunningServer } from "./main.js";
 
 const exec = promisify(execFile);
 
@@ -82,6 +87,81 @@ describe("server end-to-end", () => {
       expect(clientDoc.getText("build.md").toString()).toContain("collaborative build spec");
     } finally {
       socket.close();
+    }
+  });
+});
+
+/**
+ * Regression tests for the "edit build.md → reload → scrambled text" bug.
+ *
+ * The room lifecycle must load and persist a workspace doc *synchronously at its
+ * boundaries*, so a reconnecting client never syncs against a half-loaded doc and
+ * a reopen never reads half-written state. These drive `createServer` directly
+ * (no listening socket) to exercise the open/edit/dispose/reopen sequence
+ * deterministically.
+ */
+describe("workspace doc lifecycle (reload-scramble regression)", () => {
+  let root: string;
+  const MODEL_LINE = "model: anthropic:cc/claude-sonnet-4-6\n";
+  /** A no-op sync connection: enough to register/deregister a room client. */
+  const noopConn: SyncConnection = { send: () => {} };
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "mdlife-"));
+    const dir = join(root, "demo");
+    await mkdir(join(dir, "sources"), { recursive: true });
+    await writeFile(join(dir, "build.md"), "# original\n\nfirst draft", "utf8");
+  });
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it("loads build.md into the doc synchronously, before any client can sync it", () => {
+    const { registry, dispose } = createServer({ workspacesRoot: root });
+    try {
+      // get() builds the room + its doc; a client could connect on the very next
+      // tick, so the doc must already carry its on-disk content right here.
+      const room = registry.get("demo");
+      expect(getBuildText(room.doc).toString()).toBe("# original\n\nfirst draft");
+    } finally {
+      dispose();
+    }
+  });
+
+  it("flushes the edited build.md to disk synchronously when the last client leaves", async () => {
+    const { registry, dispose } = createServer({ workspacesRoot: root });
+    try {
+      const room = registry.get("demo");
+      const off = room.connect(noopConn);
+      const text = getBuildText(room.doc);
+      text.delete(0, text.length);
+      text.insert(0, MODEL_LINE);
+
+      off(); // last client leaves → dispose must persist before returning
+
+      const onDisk = await readFile(join(root, "demo", "build.md"), "utf8");
+      expect(onDisk).toBe(MODEL_LINE);
+    } finally {
+      dispose();
+    }
+  });
+
+  it("preserves build.md verbatim across a close/reopen cycle (no CRDT interleave)", () => {
+    const { registry, dispose } = createServer({ workspacesRoot: root });
+    try {
+      const first = registry.get("demo");
+      const off = first.connect(noopConn);
+      const text = getBuildText(first.doc);
+      text.delete(0, text.length);
+      text.insert(0, MODEL_LINE);
+      off(); // close the room (persist)
+
+      // Reopen: the fresh doc must restore exactly what was saved — verbatim,
+      // not a scrambled merge of the old and reconciled histories.
+      const reopened = registry.get("demo");
+      expect(getBuildText(reopened.doc).toString()).toBe(MODEL_LINE);
+    } finally {
+      dispose();
     }
   });
 });
