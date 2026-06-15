@@ -1,0 +1,5 @@
+# The collaborative text (build.md + Markdown sources) must be LF: CodeMirror and
+# the Yjs Y.Text are LF-only, and CRLF desyncs the editor from the shared text
+# (scrambling edits). The server also normalizes on read, but keeping the repo's
+# own files LF avoids reintroducing CRLF via git core.autocrlf on Windows.
+*.md text eol=lf

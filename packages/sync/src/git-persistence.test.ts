@@ -8,6 +8,7 @@ import * as Y from "yjs";
 import { applySnapshot, getBuildText, loadSnapshot } from "./doc-model.js";
 import {
   readWorkspaceFromDisk,
+  readWorkspaceFromDiskSync,
   materializeToDisk,
   commitSnapshot,
   listSnapshots,
@@ -63,6 +64,22 @@ describe("git-backed persistence", () => {
   it("returns an empty source map when there is no sources dir", async () => {
     await writeFile(join(dir, "build.md"), "just a build file", "utf8");
     expect(await readWorkspaceFromDisk(dir)).toEqual({ buildMd: "just a build file", sources: {} });
+  });
+
+  it("normalizes CRLF/CR to LF on read (the Y.Text + CodeMirror are LF-only)", async () => {
+    // Windows checkouts (core.autocrlf) leave \r\n in build.md. If that reaches
+    // the Y.Text, CodeMirror — which normalizes to \n — ends up SHORTER than the
+    // Y.Text, so y-codemirror writes edits at the wrong offset and scrambles the
+    // doc. The disk-read boundary must strip \r so the collaborative text is LF.
+    await mkdir(join(dir, "sources"), { recursive: true });
+    await writeFile(join(dir, "build.md"), "## a\r\nmodel: x\r\nb", "utf8");
+    await writeFile(join(dir, "sources", "s.md"), "line1\r\nline2\rline3", "utf8");
+
+    for (const snap of [await readWorkspaceFromDisk(dir), readWorkspaceFromDiskSync(dir)]) {
+      expect(snap.buildMd).toBe("## a\nmodel: x\nb");
+      expect(snap.buildMd).not.toContain("\r");
+      expect(snap.sources["sources/s.md"]).toBe("line1\nline2\nline3");
+    }
   });
 
   it("commits a snapshot and lists it", async () => {

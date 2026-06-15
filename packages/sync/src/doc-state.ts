@@ -13,6 +13,7 @@
  * durability and lives under the gitignored `.makedown/`.
  */
 import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import * as Y from "yjs";
 
@@ -29,6 +30,17 @@ export async function saveDocState(doc: Y.Doc, dir: string): Promise<void> {
 }
 
 /**
+ * Synchronous twin of {@link saveDocState}, for the room-teardown path where the
+ * doc must be persisted with no async window before it is released (a
+ * dispose-then-immediate-reopen would otherwise restore from half-written state).
+ */
+export function saveDocStateSync(doc: Y.Doc, dir: string): void {
+  const path = docStatePath(dir);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, Y.encodeStateAsUpdate(doc));
+}
+
+/**
  * Restore a workspace's CRDT state into `doc` if a saved state exists. Returns
  * `true` when state was applied, `false` on first-ever open (no file yet).
  */
@@ -36,6 +48,22 @@ export async function restoreDocState(doc: Y.Doc, dir: string): Promise<boolean>
   let bytes: Uint8Array;
   try {
     bytes = await readFile(docStatePath(dir));
+  } catch {
+    return false;
+  }
+  Y.applyUpdate(doc, bytes);
+  return true;
+}
+
+/**
+ * Synchronous twin of {@link restoreDocState}, for loading a doc fully *before*
+ * it is exposed to any room/client. Doing this async let a reconnecting client
+ * sync against an empty doc and then race the restore, scrambling the text.
+ */
+export function restoreDocStateSync(doc: Y.Doc, dir: string): boolean {
+  let bytes: Uint8Array;
+  try {
+    bytes = readFileSync(docStatePath(dir));
   } catch {
     return false;
   }
