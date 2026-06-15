@@ -81,6 +81,21 @@ cache: deterministic
 - Unique within the document.
 - Used as the dependency reference from other targets (see §4 `inputs`).
 
+### 3.2 Importing non-Markdown sources
+
+Sources are Markdown/text. To use a non-Markdown file (PDF, DOCX, PPTX, XLSX,
+HTML, EPUB, images, …) as a source, convert it to Markdown first with
+`md import <file>` (CLI), which uses [MarkItDown](https://github.com/microsoft/markitdown).
+The result is written into the workspace as an ordinary `.md` source you then
+reference like any other (`{{sources/<name>.md}}`); from the engine's point of
+view it is just text. The conversion is content-addressed (cached on the source
+bytes + importer version), so re-importing unchanged bytes does no work.
+
+> MarkItDown is an **optional external tool** (`pip install 'markitdown[all]'`),
+> invoked as a subprocess — it is not a dependency of the engine. Referencing a
+> binary file *directly* in `inputs:` (auto-import inside the build graph) is
+> reserved; see §11.
+
 ---
 
 ## 4. Recipe header fields
@@ -378,6 +393,9 @@ A conforming **engine** MUST:
 - `:fn(args)` body transforms beyond `head`/`tail`.
 - `when:` conditional targets; `matrix:` parameter sweeps.
 - Remote/imported sub-graphs (`import:`).
+- In-graph auto-import: a non-Markdown file referenced directly in `inputs:`,
+  converted on resolve (cached by content hash) so editing the binary rebuilds
+  downstream — see §3.2 for the explicit `md import` form available today.
 - Signed provenance for externally shared artifacts.
 
 Changes are tracked in this file's version header; pre-1.0 may break.
