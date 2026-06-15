@@ -55,11 +55,21 @@ describe("MarkItDownImporter.convert", () => {
     expect(calls[0]?.args).toEqual(["/abs/data", "-m", "application/pdf", "-c", "utf-8"]);
   });
 
-  it("honors a custom command name", async () => {
+  it("honors a single-string custom command (path with spaces, not tokenized)", async () => {
     const { exec, calls } = fakeExec({ stdout: "ok" });
-    const importer = new MarkItDownImporter({ exec, command: "python -m markitdown" });
+    const spaced = "C:\\Program Files\\md\\markitdown.exe";
+    const importer = new MarkItDownImporter({ exec, command: spaced });
     await importer.convert({ path: "/abs/x.docx" });
-    expect(calls[0]?.command).toBe("python -m markitdown");
+    expect(calls[0]?.command).toBe(spaced);
+    expect(calls[0]?.args).toEqual(["/abs/x.docx"]);
+  });
+
+  it("honors an array command (executable + leading args), e.g. python -m markitdown", async () => {
+    const { exec, calls } = fakeExec({ stdout: "ok" });
+    const importer = new MarkItDownImporter({ exec, command: ["python", "-m", "markitdown"] });
+    await importer.convert({ path: "/abs/x.docx", extensionHint: ".docx" });
+    expect(calls[0]?.command).toBe("python");
+    expect(calls[0]?.args).toEqual(["-m", "markitdown", "/abs/x.docx", "-x", ".docx"]);
   });
 
   it("translates a missing binary (ENOENT) into an actionable not_installed error", async () => {
