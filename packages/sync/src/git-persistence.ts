@@ -25,6 +25,18 @@ const BUILD_FILE = "build.md";
 /** Directory (relative to the workspace root) whose files are collaborative sources. */
 const SOURCES_DIR = "sources";
 
+/**
+ * Normalize line endings to LF. The collaborative Y.Text — and CodeMirror, which
+ * binds to it — are LF-only: CodeMirror silently normalizes input to `\n`, so any
+ * CRLF that reaches the Y.Text makes the editor SHORTER than the Y.Text and
+ * y-codemirror writes edits at the wrong offset, scrambling the doc. Windows
+ * checkouts (git core.autocrlf) routinely leave `\r\n` in `build.md`, so we strip
+ * `\r` at every disk-read boundary that feeds the live doc.
+ */
+function normalizeEol(content: string): string {
+  return content.replace(/\r\n?/g, "\n");
+}
+
 /** Commit author for snapshots when none is supplied. */
 export interface GitAuthor {
   readonly name: string;
@@ -79,13 +91,13 @@ async function walk(dir: string, root: string): Promise<string[]> {
 export async function readWorkspaceFromDisk(dir: string): Promise<WorkspaceSnapshot> {
   let buildMd = "";
   try {
-    buildMd = await readFile(join(dir, BUILD_FILE), "utf8");
+    buildMd = normalizeEol(await readFile(join(dir, BUILD_FILE), "utf8"));
   } catch {
     buildMd = "";
   }
   const sources: Record<string, string> = {};
   for (const rel of await walk(dir, join(dir, SOURCES_DIR))) {
-    sources[rel] = await readFile(join(dir, rel), "utf8");
+    sources[rel] = normalizeEol(await readFile(join(dir, rel), "utf8"));
   }
   return { buildMd, sources };
 }
@@ -136,13 +148,13 @@ function walkSync(dir: string, root: string): string[] {
 export function readWorkspaceFromDiskSync(dir: string): WorkspaceSnapshot {
   let buildMd = "";
   try {
-    buildMd = readFileSync(join(dir, BUILD_FILE), "utf8");
+    buildMd = normalizeEol(readFileSync(join(dir, BUILD_FILE), "utf8"));
   } catch {
     buildMd = "";
   }
   const sources: Record<string, string> = {};
   for (const rel of walkSync(dir, join(dir, SOURCES_DIR))) {
-    sources[rel] = readFileSync(join(dir, rel), "utf8");
+    sources[rel] = normalizeEol(readFileSync(join(dir, rel), "utf8"));
   }
   return { buildMd, sources };
 }
