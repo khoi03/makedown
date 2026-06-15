@@ -66,6 +66,28 @@ describe("ApiClient", () => {
     expect(calls[0]?.init?.method).toBe("POST");
   });
 
+  it("imports a source file (POSTs filename + base64) and returns the result", async () => {
+    const { fn, calls } = mockFetch([{ status: 201, body: { path: "sources/report.md", cached: false, chars: 42 } }]);
+    const api = new ApiClient("", fn);
+
+    const result = await api.importSource("ws", "report.pdf", "JVBERi0=");
+
+    expect(result).toEqual({ path: "sources/report.md", cached: false, chars: 42 });
+    expect(calls[0]?.url).toBe("/api/workspaces/ws/import");
+    expect(calls[0]?.init?.method).toBe("POST");
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({
+      fileName: "report.pdf",
+      contentBase64: "JVBERi0=",
+    });
+  });
+
+  it("includes the optional out path when provided", async () => {
+    const { fn, calls } = mockFetch([{ status: 201, body: { path: "sources/x.md", cached: true, chars: 1 } }]);
+    const api = new ApiClient("", fn);
+    await api.importSource("ws", "x.docx", "QQ==", "sources/x.md");
+    expect(JSON.parse(String(calls[0]?.init?.body)).out).toBe("sources/x.md");
+  });
+
   it("sends a bodyless POST WITHOUT a JSON content-type (regression: empty JSON body 500)", async () => {
     const { fn, calls } = mockFetch([{ status: 202, body: { jobId: "j" } }]);
     const api = new ApiClient("", fn);

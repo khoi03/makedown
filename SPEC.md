@@ -85,7 +85,8 @@ cache: deterministic
 
 Sources are Markdown/text. To use a non-Markdown file (PDF, DOCX, PPTX, XLSX,
 HTML, EPUB, images, …) as a source, convert it to Markdown first with
-`md import <file>` (CLI), which uses [MarkItDown](https://github.com/microsoft/markitdown).
+`md import <file>` (CLI) — or the collaborative workbench's **Import file**
+button — both of which use [MarkItDown](https://github.com/microsoft/markitdown).
 The result is written into the workspace as an ordinary `.md` source you then
 reference like any other (`{{sources/<name>.md}}`); from the engine's point of
 view it is just text. The conversion is content-addressed (cached on the source

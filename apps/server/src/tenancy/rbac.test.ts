@@ -13,17 +13,19 @@ describe("can", () => {
     expect(can("viewer", "analytics:read")).toBe(true);
     expect(can("viewer", "workspace:build")).toBe(false);
     expect(can("viewer", "workspace:snapshot")).toBe(false);
+    expect(can("viewer", "workspace:import")).toBe(false);
     expect(can("viewer", "member:manage")).toBe(false);
     expect(can("viewer", "org:delete")).toBe(false);
   });
 
-  it("lets members build, snapshot, branch, approve, and share — but not manage members or delete the org", () => {
+  it("lets members build, snapshot, branch, import, approve, and share — but not manage members or delete the org", () => {
     const allowed: Action[] = [
       "workspace:read",
       "workspace:build",
       "workspace:snapshot",
       "workspace:branch",
       "workspace:create",
+      "workspace:import",
       "approval:resolve",
       "share:create",
     ];
@@ -52,6 +54,7 @@ describe("can", () => {
       "workspace:snapshot",
       "workspace:branch",
       "workspace:create",
+      "workspace:import",
       "approval:resolve",
       "share:create",
       "member:manage",

@@ -11,6 +11,7 @@
     { "path": "../../packages/providers" },
     { "path": "../../packages/agents" },
     { "path": "../../packages/engine" },
+    { "path": "../../packages/import" },
     { "path": "../../packages/sync" }
   ]
 }

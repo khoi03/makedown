@@ -19,6 +19,7 @@ export type Action =
   | "workspace:snapshot"
   | "workspace:branch"
   | "workspace:create"
+  | "workspace:import"
   | "approval:resolve"
   | "share:create"
   | "analytics:read"
@@ -35,6 +36,7 @@ const MIN_ROLE: Record<Action, Role> = {
   "workspace:snapshot": "member",
   "workspace:branch": "member",
   "workspace:create": "member",
+  "workspace:import": "member",
   "approval:resolve": "member",
   "share:create": "member",
   "analytics:read": "viewer",

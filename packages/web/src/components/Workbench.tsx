@@ -12,6 +12,7 @@ import { useCollaborativeDoc, type LocalUser } from "../hooks/useCollaborativeDo
 import { useBuildStream } from "../hooks/useBuildStream.js";
 import { Toolbar, type Presence } from "./toolbar/Toolbar.js";
 import { EditorPane } from "./editor/EditorPane.js";
+import { ImportControl } from "./import/ImportControl.js";
 import { GraphPane } from "./graph/GraphPane.js";
 import { InspectorPane } from "./inspector/InspectorPane.js";
 import { ApprovalModal } from "./approval/ApprovalModal.js";
@@ -158,6 +159,7 @@ export function Workbench({ api, workspaceId, user, onBack }: WorkbenchProps) {
         <section className="pane">
           <div className="pane__header">
             <span className="pane__title">build.md</span>
+            <ImportControl api={api} workspaceId={workspaceId} />
           </div>
           <div className="pane__body">
             <EditorPane doc={doc} awareness={awareness} />

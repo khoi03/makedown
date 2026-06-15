@@ -16,6 +16,7 @@ import {
   loadIntoDoc,
   restoreDocState,
   attachWebSocketServer,
+  getSourceText,
   type GitAuthor,
 } from "@makedown/sync";
 import { WorkspaceStore } from "./workspace.js";
@@ -142,6 +143,19 @@ export function createServer(opts: ServerOptions): AssembledServer {
     reloadWorkspace: async (id) => {
       const doc = docs.get(id);
       if (doc) await loadIntoDoc(doc, store.resolve(id));
+    },
+    // Surgically insert a just-imported source into the live doc (if a room is
+    // open) so connected editors see it at once. Deliberately NOT a full reload:
+    // touching only this one Y.Text never clobbers unsaved build.md edits. If no
+    // room is open the file is still on disk; the next room open loads it.
+    addSourceToWorkspace: (id, relPath, markdown) => {
+      const doc = docs.get(id);
+      if (!doc) return;
+      const text = getSourceText(doc, relPath);
+      doc.transact(() => {
+        text.delete(0, text.length);
+        text.insert(0, markdown);
+      });
     },
   });
 

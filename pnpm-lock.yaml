@@ -35,6 +35,9 @@ importers:
       '@makedown/format':
         specifier: workspace:*
         version: link:../../packages/format
+      '@makedown/import':
+        specifier: workspace:*
+        version: link:../../packages/import
       '@makedown/providers':
         specifier: workspace:*
         version: link:../../packages/providers
