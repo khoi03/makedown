@@ -10,6 +10,7 @@
     { "path": "../format" },
     { "path": "../providers" },
     { "path": "../agents" },
-    { "path": "../engine" }
+    { "path": "../engine" },
+    { "path": "../import" }
   ]
 }
