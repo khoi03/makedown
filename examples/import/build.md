@@ -1,6 +1,6 @@
 ---
 defaults:
-  model: anthropic:cc/claude-opus-4-6
+  model: anthropic:cc/claude-sonnet-4-6
 artifacts_dir: artifacts
 ---
 
