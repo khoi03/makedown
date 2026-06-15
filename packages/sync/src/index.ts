@@ -21,7 +21,9 @@ export {
 
 export {
   readWorkspaceFromDisk,
+  readWorkspaceFromDiskSync,
   materializeToDisk,
+  materializeToDiskSync,
   commitSnapshot,
   listSnapshots,
   currentBranch,
@@ -39,7 +41,13 @@ export {
   type WorkspacePersistenceOptions,
 } from "./git-persistence.js";
 
-export { saveDocState, restoreDocState, docStatePath } from "./doc-state.js";
+export {
+  saveDocState,
+  saveDocStateSync,
+  restoreDocState,
+  restoreDocStateSync,
+  docStatePath,
+} from "./doc-state.js";
 
 export {
   WorkspaceRoom,

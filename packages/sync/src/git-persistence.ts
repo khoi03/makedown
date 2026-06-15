@@ -10,12 +10,13 @@
  * engine's sandbox discipline.
  */
 import { readFile, writeFile, mkdir, rm, readdir } from "node:fs/promises";
+import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync } from "node:fs";
 import { join, dirname, relative, sep } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import * as Y from "yjs";
 import { loadSnapshot, applySnapshot, type WorkspaceSnapshot } from "./doc-model.js";
-import { saveDocState } from "./doc-state.js";
+import { saveDocState, saveDocStateSync } from "./doc-state.js";
 
 const exec = promisify(execFile);
 
@@ -105,6 +106,59 @@ export async function materializeToDisk(snapshot: WorkspaceSnapshot, dir: string
     const abs = join(dir, rel);
     await mkdir(dirname(abs), { recursive: true });
     await writeFile(abs, content, "utf8");
+  }
+}
+
+/** Synchronous twin of {@link walk}. */
+function walkSync(dir: string, root: string): string[] {
+  let entries;
+  try {
+    entries = readdirSync(root, { withFileTypes: true });
+  } catch {
+    return []; // missing dir -> no sources
+  }
+  const out: string[] = [];
+  for (const entry of entries) {
+    const abs = join(root, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...walkSync(dir, abs));
+    } else if (entry.isFile()) {
+      out.push(relative(dir, abs).split(sep).join("/"));
+    }
+  }
+  return out;
+}
+
+/**
+ * Synchronous twin of {@link readWorkspaceFromDisk}, for seeding/reconciling a
+ * doc *before* it is exposed to any client (the open path must not yield).
+ */
+export function readWorkspaceFromDiskSync(dir: string): WorkspaceSnapshot {
+  let buildMd = "";
+  try {
+    buildMd = readFileSync(join(dir, BUILD_FILE), "utf8");
+  } catch {
+    buildMd = "";
+  }
+  const sources: Record<string, string> = {};
+  for (const rel of walkSync(dir, join(dir, SOURCES_DIR))) {
+    sources[rel] = readFileSync(join(dir, rel), "utf8");
+  }
+  return { buildMd, sources };
+}
+
+/** Synchronous twin of {@link materializeToDisk}, for the room-teardown path. */
+export function materializeToDiskSync(snapshot: WorkspaceSnapshot, dir: string): void {
+  writeFileSync(join(dir, BUILD_FILE), snapshot.buildMd, "utf8");
+
+  const wanted = new Set(Object.keys(snapshot.sources));
+  for (const rel of walkSync(dir, join(dir, SOURCES_DIR))) {
+    if (!wanted.has(rel)) rmSync(join(dir, rel), { force: true });
+  }
+  for (const [rel, content] of Object.entries(snapshot.sources)) {
+    const abs = join(dir, rel);
+    mkdirSync(dirname(abs), { recursive: true });
+    writeFileSync(abs, content, "utf8");
   }
 }
 
@@ -284,6 +338,29 @@ export class WorkspacePersistence {
     // Persist the CRDT state too, so a reopened/restarted room restores the same
     // history instead of re-inserting text (which would duplicate on sync).
     await saveDocState(this.doc, this.dir);
+  }
+
+  /**
+   * Materialize pending changes *synchronously* — for the room-teardown path
+   * (last client left / shutdown). Persisting with blocking I/O leaves no async
+   * window, so a dispose-then-immediate-reopen can never restore from a
+   * half-written `build.md`/`ydoc.bin` pair (the reload-scramble bug). The
+   * debounced editing path still uses the async {@link flush}.
+   */
+  flushSync(): void {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = undefined;
+    }
+    if (this.destroyed) return;
+    const snapshot = loadSnapshot(this.doc);
+    if (this.opts.onMaterialize) {
+      // Full override (tests / custom sinks): no disk side-effects.
+      void this.opts.onMaterialize(snapshot);
+      return;
+    }
+    materializeToDiskSync(snapshot, this.dir);
+    saveDocStateSync(this.doc, this.dir);
   }
 
   /** Materialize and commit a named VCS snapshot. */

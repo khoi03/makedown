@@ -14,7 +14,9 @@ import {
   RoomRegistry,
   WorkspacePersistence,
   loadIntoDoc,
-  restoreDocState,
+  applySnapshot,
+  readWorkspaceFromDiskSync,
+  restoreDocStateSync,
   attachWebSocketServer,
   getSourceText,
   type GitAuthor,
@@ -94,35 +96,34 @@ export function createServer(opts: ServerOptions): AssembledServer {
     const existing = docs.get(id);
     if (existing) return existing;
     const doc = new Y.Doc();
-    docs.set(id, doc);
     const dir = store.resolve(id);
-    // Attach persistence only AFTER the initial load so loading from disk does
-    // not get echoed back as a "change" (and never clobbers disk with an empty
-    // doc before it has loaded).
-    const attachPersistence = (): void => {
-      persistences.set(id, new WorkspacePersistence(doc, dir, { author: opts.author }));
-    };
-    // Restore the CRDT state FIRST (stable history, idempotent reconnects), THEN
-    // reconcile with the on-disk text — a no-op when they already match, a clean
-    // replace when the text changed out-of-band (e.g. a git branch switch).
-    // Order matters: text-loading before restoring would create a duplicate insert.
-    void (async () => {
-      await restoreDocState(doc, dir);
-      await loadIntoDoc(doc, dir);
-    })().then(attachPersistence, attachPersistence);
+    // Load the doc FULLY and SYNCHRONOUSLY before it is exposed to any room or
+    // client. The previous fire-and-forget async load let a reconnecting client
+    // sync against an empty doc and then race the restore + disk reconcile,
+    // interleaving ops into scrambled text on reload. Restore the CRDT state
+    // first (stable client ids, idempotent reconnects), THEN reconcile to the
+    // on-disk text — a no-op when they agree, and safe even when they differ
+    // because no client is attached yet, so the replace happens in isolation
+    // rather than merging concurrent ops.
+    restoreDocStateSync(doc, dir);
+    applySnapshot(doc, readWorkspaceFromDiskSync(dir));
+    docs.set(id, doc);
+    // Attach persistence only now, so the initial load is not echoed as an edit.
+    persistences.set(id, new WorkspacePersistence(doc, dir, { author: opts.author }));
     return doc;
   }
 
   const registry = new RoomRegistry({
     createDoc: (id) => liveDoc(id),
     onDispose: (id) => {
-      // Last client left: flush, then release the doc + persistence so a
-      // long-running server doesn't accumulate observers for every workspace
-      // ever opened. A later reopen recreates and reloads them.
+      // Last client left: persist SYNCHRONOUSLY, then release the doc +
+      // persistence so a long-running server doesn't accumulate observers for
+      // every workspace ever opened. Synchronous so a dispose-then-immediate-
+      // reopen can never observe half-written state (the reload-scramble bug);
+      // a later reopen recreates and reloads from the consistent final state.
       const persistence = persistences.get(id);
-      if (persistence) {
-        void persistence.flush().finally(() => persistence.destroy());
-      }
+      persistence?.flushSync();
+      persistence?.destroy();
       persistences.delete(id);
       docs.delete(id);
     },
