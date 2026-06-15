@@ -1,7 +1,22 @@
 /** Implementations behind the `md` subcommands. */
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
-import { planBuild, runBuild, renderTarget, estimateBuildCost, type BuildPlan } from "@makedown/engine";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { basename, dirname, extname, isAbsolute, join, resolve } from "node:path";
+import {
+  planBuild,
+  runBuild,
+  renderTarget,
+  estimateBuildCost,
+  resolveInWorkspace,
+  PathEscapeError,
+  type BuildPlan,
+} from "@makedown/engine";
+import {
+  MarkItDownImporter,
+  FileImportCache,
+  importWithCache,
+  ImporterError,
+  type Importer,
+} from "@makedown/import";
 import { cachePolicyToString, type BuildDoc } from "@makedown/shared";
 import { loadDoc, makeContext, resolveDir, hasAnyProvider, BUILD_FILE } from "./workspace.js";
 import { loadEnv } from "./env.js";
@@ -167,6 +182,100 @@ export async function cmdShare(name: string, opts: ShareOptions = {}): Promise<v
 
   console.log(styler.green(`✓ Exported ${name} → ${outPath}`));
   console.log(styler.dim("  Open it in a browser or host the file anywhere — it's fully self-contained."));
+}
+
+export interface ImportOptions {
+  /** Output path (workspace-relative); defaults to `sources/<name>.md`. */
+  readonly out?: string;
+  readonly dir?: string;
+  /** Injectable importer (tests inject a fake; default is {@link MarkItDownImporter}). */
+  readonly importer?: Importer;
+}
+
+/**
+ * Resolve a MarkItDown command override from the environment. Set
+ * `MAKEDOWN_MARKITDOWN_CMD` when the `markitdown` shim isn't on PATH — most
+ * commonly `python -m markitdown` (e.g. after a `pip install --user` on Windows,
+ * where the Scripts dir is often off PATH). A multi-token value is split into an
+ * argv array so nothing is shell-interpreted; an exe path with spaces should be
+ * put on PATH instead.
+ */
+export function markitdownCommandFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): string | string[] | undefined {
+  const raw = env["MAKEDOWN_MARKITDOWN_CMD"]?.trim();
+  if (!raw) return undefined;
+  const parts = raw.split(/\s+/);
+  return parts.length === 1 ? parts[0] : parts;
+}
+
+/**
+ * `md import <file>` — convert a non-Markdown source (PDF, DOCX, PPTX, XLSX,
+ * HTML, …) to Markdown via MarkItDown and write it into the workspace, where it
+ * becomes a normal hashable source referenceable as `{{sources/…}}`.
+ *
+ * The named input file is read as-is (an explicit user choice, like any CLI
+ * argument); the output, however, is written *into* the workspace and so is
+ * confined to it. The conversion is content-addressed: re-importing identical
+ * bytes is served from cache with no second (potentially costly) conversion.
+ */
+export async function cmdImport(file: string, opts: ImportOptions = {}): Promise<void> {
+  const dir = resolveDir(opts.dir);
+  const inputPath = isAbsolute(file) ? file : resolve(process.cwd(), file);
+
+  let bytes: Uint8Array;
+  try {
+    bytes = new Uint8Array(await readFile(inputPath));
+  } catch {
+    console.error(styler.red(`Cannot read source file: ${file}`));
+    process.exitCode = 1;
+    return;
+  }
+
+  const relOut = opts.out ?? join("sources", `${basename(inputPath, extname(inputPath))}.md`);
+  let outPath: string;
+  try {
+    outPath = resolveInWorkspace(dir, relOut);
+  } catch (err) {
+    if (err instanceof PathEscapeError) {
+      console.error(styler.red(err.message));
+      process.exitCode = 1;
+      return;
+    }
+    throw err;
+  }
+
+  const importer = opts.importer ?? new MarkItDownImporter({ command: markitdownCommandFromEnv() });
+  const cache = new FileImportCache(join(dir, ".makedown", "imports"));
+  const extensionHint = extname(inputPath) || undefined;
+
+  let result;
+  try {
+    result = await importWithCache(importer, cache, {
+      path: inputPath,
+      bytes,
+      hints: { extensionHint },
+    });
+  } catch (err) {
+    if (err instanceof ImporterError) {
+      console.error(styler.red(err.message));
+      process.exitCode = 1;
+      return;
+    }
+    throw err;
+  }
+
+  await mkdir(dirname(outPath), { recursive: true });
+  await writeFile(outPath, result.markdown, "utf8");
+
+  const ref = relOut.replaceAll("\\", "/");
+  console.log(
+    styler.green(`✓ Imported ${file} → ${outPath}`) +
+      (result.cached ? styler.dim(" (from cache)") : ""),
+  );
+  console.log(
+    styler.dim(`  ${result.markdown.length} chars of Markdown — reference it as {{${ref}}} in build.md.`),
+  );
 }
 
 export async function cmdRender(name: string, dirArg?: string): Promise<void> {

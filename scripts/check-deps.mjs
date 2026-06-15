@@ -22,6 +22,7 @@ export const FRAMEWORK_PACKAGES = [
   "@makedown/format",
   "@makedown/providers",
   "@makedown/agents",
+  "@makedown/import",
   "@makedown/engine",
   "@makedown/cli",
 ];
@@ -29,7 +30,7 @@ export const FRAMEWORK_PACKAGES = [
 /** AGPL server/collab packages the framework is forbidden from importing. */
 export const SERVER_PACKAGES = ["@makedown/sync", "@makedown/web", "@makedown/server"];
 
-const FRAMEWORK_DIRS = ["packages/shared", "packages/format", "packages/providers", "packages/agents", "packages/engine", "packages/cli"];
+const FRAMEWORK_DIRS = ["packages/shared", "packages/format", "packages/providers", "packages/agents", "packages/import", "packages/engine", "packages/cli"];
 
 /** Matches `from "X"` and `import("X")` specifiers. */
 const SPECIFIER = /(?:from|import)\s*\(?\s*["']([^"']+)["']/g;

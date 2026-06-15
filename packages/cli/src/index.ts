@@ -5,6 +5,7 @@ import {
   cmdBuild,
   cmdCost,
   cmdGraph,
+  cmdImport,
   cmdInit,
   cmdRender,
   cmdShare,
@@ -42,6 +43,16 @@ program
   .description("Print the build graph in execution order")
   .argument("[dir]", "workspace directory")
   .action(cmdGraph);
+
+program
+  .command("import")
+  .description("Convert a file (PDF, DOCX, PPTX, XLSX, HTML, …) to a Markdown source via MarkItDown")
+  .argument("<file>", "source file to convert")
+  .argument("[dir]", "workspace directory")
+  .option("-o, --out <file>", "output path inside the workspace (default: sources/<name>.md)")
+  .action((file: string, dir: string | undefined, opts: { out?: string }) =>
+    cmdImport(file, { dir, out: opts.out }),
+  );
 
 program
   .command("render")

@@ -18,6 +18,7 @@ md render <target>  # the exact system + user prompt a target would send — no 
 md why <target>     # full provenance: inputs, prompt, model, params, cost, tokens
 md cost             # estimated token/$ upper bound before running (no model calls)
 md share <target>   # export a built artifact to a self-contained read-only HTML page
+md import <file>    # convert a PDF/DOCX/PPTX/XLSX/HTML/… file to a Markdown source
 ```
 
 Each target can set a `system:` prompt (or inherit a workspace default); both the
@@ -72,6 +73,26 @@ in a throwaway `git worktree`, you review its diff at an approval prompt, and th
 accepted **unified diff** is written as the artifact (`git apply` it). It needs a
 git repo, a key, and `npm install @anthropic-ai/claude-agent-sdk`.
 
+### Importing non-Markdown sources
+
+Sources are Markdown/text. To pull in a PDF, DOCX, PPTX, XLSX, HTML, EPUB, image,
+etc., convert it to a Markdown source with `md import`, then reference the result
+like any other source:
+
+```bash
+pip install 'markitdown[all]'                # one-time: the optional converter
+md import ./quarterly-report.pdf             # → sources/quarterly-report.md
+md import ./deck.pptx -o sources/deck.md     # choose the output path
+```
+
+It uses Microsoft's [MarkItDown](https://github.com/microsoft/markitdown) under
+the hood (an **optional external tool**, not an engine dependency — invoked as a
+subprocess with a timeout + output cap; a missing install gives a `pip install`
+hint, never a crash). The conversion is **content-addressed** — re-importing the
+same bytes is served from cache with no second conversion. The output is written
+*inside* the workspace (so it stays confined there); the named input is read
+as-is. [`examples/import`](./examples/import) is a runnable, key-free tour.
+
 > **Security — `transform`/`agent` run code.** Every declared path (inputs,
 > outputs, scripts) is confined to the workspace — `..`, absolute paths, and
 > escaping symlinks are rejected. A `transform`'s isolation is set by its
@@ -116,6 +137,7 @@ makedown/
 │   ├── engine/             # [OSS] ★ DAG, content-addressed store, hashing, provenance, sandbox
 │   ├── providers/          # [OSS] model adapters (Anthropic first) + cost accounting
 │   ├── agents/             # [OSS] coding-agent runner (Claude Agent SDK) for the agent step
+│   ├── import/             # [OSS] any-file → Markdown importer (MarkItDown bridge) + conversion cache
 │   ├── cli/                # [OSS] the `md` command
 │   ├── sync/               # [AGPL-3.0] Yjs CRDT doc model + git backing + WebSocket sync server
 │   └── web/                # [AGPL-3.0] React collaborative workbench (editor + DAG + inspector)

@@ -19,6 +19,7 @@
     "@makedown/agents": "workspace:*",
     "@makedown/engine": "workspace:*",
     "@makedown/format": "workspace:*",
+    "@makedown/import": "workspace:*",
     "@makedown/providers": "workspace:*",
     "@makedown/shared": "workspace:*",
     "commander": "^12.1.0"
