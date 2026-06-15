@@ -10,6 +10,7 @@ import * as Y from "yjs";
 import { Awareness } from "y-protocols/awareness";
 import {
   encodeSyncStep1,
+  encodeSyncUpdate,
   readMessage,
   getBuildText,
   type SyncConnection,
@@ -88,6 +89,64 @@ describe("server end-to-end", () => {
       expect(clientDoc.getText("build.md").toString()).toContain("collaborative build spec");
     } finally {
       socket.close();
+    }
+  });
+
+  it("does not scramble build.md across edit → disconnect → reconnect (the reload repro)", async () => {
+    const wsUrl = server.url.replace("http", "ws");
+    const TARGET = "model: anthropic:cc/claude-sonnet-4-6";
+
+    /** Connect a client, run the y-sync handshake, resolve once build.md is seeded. */
+    const connect = (): { doc: Y.Doc; socket: WebSocket; synced: Promise<void> } => {
+      const doc = new Y.Doc();
+      const awareness = new Awareness(doc);
+      const socket = new WebSocket(`${wsUrl}/sync/demo`);
+      socket.binaryType = "arraybuffer";
+      const conn: SyncConnection = { send: (d) => socket.send(d) };
+      socket.on("message", (data: ArrayBuffer) => {
+        const reply = readMessage(doc, awareness, new Uint8Array(data), conn);
+        if (reply) socket.send(reply);
+      });
+      // Propagate this client's *local* edits to the server (origin !== conn);
+      // remote updates applied by readMessage carry origin === conn and are skipped.
+      doc.on("update", (update: Uint8Array, origin: unknown) => {
+        if (origin !== conn && socket.readyState === socket.OPEN) {
+          socket.send(encodeSyncUpdate(update));
+        }
+      });
+      const synced = new Promise<void>((resolve, reject) => {
+        socket.on("open", () => socket.send(encodeSyncStep1(doc)));
+        socket.on("error", reject);
+        doc.on("update", () => {
+          const t = doc.getText("build.md").toString();
+          if (t.includes("collaborative") || t.includes("sonnet")) resolve();
+        });
+        setTimeout(() => reject(new Error("timeout waiting for sync")), 4000);
+      });
+      return { doc, socket, synced };
+    };
+
+    // 1. Client A connects, gets the seed, and replaces build.md (like a UI edit).
+    const a = connect();
+    await a.synced;
+    const aText = a.doc.getText("build.md");
+    aText.delete(0, aText.length);
+    aText.insert(0, TARGET);
+    await new Promise((r) => setTimeout(r, 200)); // edit reaches the server
+
+    // 2. A disconnects → room empties → server flushSync's to disk + ydoc.bin.
+    a.socket.close();
+    await new Promise((r) => setTimeout(r, 400));
+    expect(await readFile(join(root, "demo", "build.md"), "utf8")).toBe(TARGET);
+
+    // 3. A fresh client B reconnects — this is the page reload.
+    const b = connect();
+    await b.synced;
+    await new Promise((r) => setTimeout(r, 200));
+    try {
+      expect(b.doc.getText("build.md").toString()).toBe(TARGET);
+    } finally {
+      b.socket.close();
     }
   });
 });
