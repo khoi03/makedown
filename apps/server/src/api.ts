@@ -28,6 +28,8 @@ import { collectProvenanceRows } from "./provenance-index.js";
 import { registerAuthRoutes } from "./auth-routes.js";
 import { registerShareRoutes } from "./share-routes.js";
 import { registerAnalyticsRoutes } from "./analytics-routes.js";
+import { registerImportRoutes } from "./import-routes.js";
+import { MarkItDownImporter, markitdownCommandFromEnv, type Importer } from "@makedown/import";
 import { SharingService, InMemoryShareStore } from "./sharing/index.js";
 import { NullTenancy, type TenancyProvider, type Principal, type Action } from "./tenancy/index.js";
 import { SESSION_COOKIE, parseCookie } from "./tenancy/cookies.js";
@@ -48,6 +50,12 @@ export interface ApiDeps {
   readonly flushWorkspace?: (id: string) => Promise<void>;
   /** Reload the live doc from disk after a branch switch (set by main). */
   readonly reloadWorkspace?: (id: string) => Promise<void>;
+  /** Reflect a freshly imported source into the live doc (set by main). */
+  readonly addSourceToWorkspace?: (id: string, relPath: string, markdown: string) => void;
+  /** The any-file → Markdown importer. Defaults to MarkItDown; tests inject a fake. */
+  readonly importer?: Importer;
+  /** Override the max decoded import upload size (bytes). */
+  readonly maxImportBytes?: number;
   /** Commit author for snapshots. */
   readonly author?: GitAuthor;
   /** Fastify logger toggle. */
@@ -167,6 +175,13 @@ export function buildApi(deps: ApiDeps): FastifyInstance {
   registerAuthRoutes(app, { tenancy, secureCookies: deps.secureCookies ?? false });
   registerShareRoutes(app, { sharing, store: deps.store, ensureAuthorized, rateLimit: deps.shareRateLimit });
   registerAnalyticsRoutes(app, { tenancy, rateLimit: deps.analyticsRateLimit });
+  registerImportRoutes(app, {
+    store: deps.store,
+    importer: deps.importer ?? new MarkItDownImporter({ command: markitdownCommandFromEnv() }),
+    ensureAuthorized,
+    addSourceToWorkspace: deps.addSourceToWorkspace,
+    maxImportBytes: deps.maxImportBytes,
+  });
 
   app.get("/api/workspaces", async (req, reply) => {
     const all = await deps.store.list();
