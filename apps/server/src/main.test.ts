@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, it, expect } from "vitest";
 import { mkdtemp, rm, writeFile, mkdir, readFile } from "node:fs/promises";
+import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
@@ -162,6 +163,38 @@ describe("workspace doc lifecycle (reload-scramble regression)", () => {
       expect(getBuildText(reopened.doc).toString()).toBe(MODEL_LINE);
     } finally {
       dispose();
+    }
+  });
+
+  it("treats restored CRDT state as authoritative — a divergent build.md on disk does not override it", () => {
+    // Establish a saved CRDT state holding the CORRECT text.
+    {
+      const { registry, dispose } = createServer({ workspacesRoot: root });
+      try {
+        const room = registry.get("demo");
+        const off = room.connect(noopConn);
+        const text = getBuildText(room.doc);
+        text.delete(0, text.length);
+        text.insert(0, MODEL_LINE);
+        off(); // flushSync → ydoc.bin + build.md both = MODEL_LINE
+      } finally {
+        dispose();
+      }
+    }
+    // Simulate build.md drifting out-of-band (e.g. an earlier scramble left a bad
+    // file on disk while the saved CRDT state still holds the good text). The
+    // restored state is the source of truth; reconciling it back to the bad disk
+    // — a delete+insert — is exactly what re-corrupted the doc.
+    writeFileSync(join(root, "demo", "build.md"), "model: anthropic:cc/SCRAMBLEDtext\n", "utf8");
+
+    {
+      const { registry, dispose } = createServer({ workspacesRoot: root });
+      try {
+        const reopened = registry.get("demo");
+        expect(getBuildText(reopened.doc).toString()).toBe(MODEL_LINE);
+      } finally {
+        dispose();
+      }
     }
   });
 });
