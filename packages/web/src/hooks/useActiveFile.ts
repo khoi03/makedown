@@ -11,7 +11,7 @@
  * If the open source later disappears (deletion, branch switch, snapshot reload)
  * the active file falls back to build.md instead of a phantom empty document.
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BUILD_FILE } from "../lib/doc.js";
 
 export interface ActiveFile {
@@ -39,5 +39,12 @@ export function useActiveFile(sourcePaths: readonly string[]): ActiveFile {
     }
   }, [activeFile, sourcePaths]);
 
-  return { activeFile, openFile: setActiveFile, requestOpen: setPendingOpen };
+  // An explicit open cancels any pending auto-open, so a slow import can't later
+  // yank the editor away from a file the user deliberately navigated to.
+  const openFile = useCallback((path: string): void => {
+    setPendingOpen(undefined);
+    setActiveFile(path);
+  }, []);
+
+  return { activeFile, openFile, requestOpen: setPendingOpen };
 }

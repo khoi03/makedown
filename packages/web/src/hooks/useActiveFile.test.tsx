@@ -38,6 +38,16 @@ describe("useActiveFile", () => {
     expect(screen.getByTestId("active")).toHaveTextContent("sources/late.md");
   });
 
+  it("an explicit open cancels a still-pending auto-open", () => {
+    const { rerender } = render(<Probe paths={["sources/a.md"]} />);
+    act(() => screen.getByText("request-late").click()); // queue auto-open of sources/late.md
+    act(() => screen.getByText("open-a").click()); // user deliberately opens another existing file
+
+    // late.md now syncs in, but the pending auto-open must not override the user's choice.
+    rerender(<Probe paths={["sources/a.md", "sources/late.md"]} />);
+    expect(screen.getByTestId("active")).toHaveTextContent("sources/a.md");
+  });
+
   it("falls back to build.md when the open source disappears", () => {
     const { rerender } = render(<Probe paths={["sources/a.md"]} />);
     act(() => screen.getByText("open-a").click());
