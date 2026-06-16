@@ -8,7 +8,7 @@
  */
 import type { CompletionRequest, CompletionResult, Provider } from "./provider.js";
 import { resolveMaxTokens } from "./params.js";
-import { ProviderError, kindFromStatus } from "./errors.js";
+import { ProviderError, kindFromStatus, parseRetryAfter } from "./errors.js";
 
 export interface OpenAICompatibleConfig {
   readonly apiKey: string;
@@ -65,6 +65,7 @@ export class OpenAICompatibleProvider implements Provider {
         kindFromStatus(response.status),
         "openai",
         response.status,
+        { retryAfterMs: parseRetryAfter(response.headers) },
       );
     }
 
