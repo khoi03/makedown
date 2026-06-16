@@ -13,7 +13,7 @@ import {
   type BuildCost,
 } from "@makedown/engine";
 import type { Provenance, ResolvedInput, StepType } from "@makedown/shared";
-import { loadDoc } from "./workspace.js";
+import { loadDoc, makeImportDeps } from "./workspace.js";
 
 /** A serializable view of one graph node for the DAG UI. */
 export interface GraphTargetView {
@@ -39,9 +39,12 @@ export interface ArtifactView {
   readonly provenance: Provenance;
 }
 
-/** A plan-only context: just the workspace + CAS, no provider. */
+/**
+ * A plan-only context: the workspace + CAS + the auto-import deps (so graph/cost
+ * hash binary inputs by their conversion identity), no provider.
+ */
 function planContext(dir: string): BuildContext {
-  return { workspaceDir: dir, cas: new LocalCas(join(dir, ".makedown")) };
+  return { workspaceDir: dir, cas: new LocalCas(join(dir, ".makedown")), ...makeImportDeps(dir) };
 }
 
 /** Resolve a target's current identity hash, throwing if the target is unknown. */

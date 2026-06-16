@@ -120,6 +120,9 @@ importers:
       '@makedown/format':
         specifier: workspace:*
         version: link:../format
+      '@makedown/import':
+        specifier: workspace:*
+        version: link:../import
       '@makedown/providers':
         specifier: workspace:*
         version: link:../providers

@@ -5,7 +5,9 @@
  */
 import { readFile } from "node:fs/promises";
 import { bareRef } from "@makedown/format";
+import { ImporterError } from "@makedown/import";
 import { realResolveInWorkspace } from "./paths.js";
+import type { ImportResolver } from "./imports.js";
 
 const REF_RE = /\{\{\s*([^}]+?)\s*\}\}/g;
 const HEAD_TAIL_RE = /^(head|tail)\((\d+)\)$/;
@@ -23,6 +25,7 @@ export async function renderTemplate(
   outputs: ReadonlyMap<string, string>,
   previewMissingTargets: boolean,
   bindings?: ReadonlyMap<string, string>,
+  resolver?: ImportResolver,
 ): Promise<string> {
   return replaceAsync(text, REF_RE, async (inner) => {
     const trimmed = inner.trim();
@@ -31,24 +34,39 @@ export async function renderTemplate(
     const bound = bindings?.get(ref);
     if (bound !== undefined) return applySuffix(bound, suffix);
     try {
-      const content = await readRefContent(ref, workspaceDir, outputs);
+      const content = await readRefContent(ref, workspaceDir, outputs, resolver);
       return applySuffix(content, suffix);
     } catch (err) {
       if (previewMissingTargets && outputs.has(ref)) return `«unbuilt artifact: ${ref}»`;
+      // In preview (md render/cost), tolerate an unavailable importer rather than
+      // failing the whole inspection — show a placeholder for the binary source.
+      if (previewMissingTargets && err instanceof ImporterError) {
+        return `«unconverted source: ${ref}»`;
+      }
       throw err;
     }
   });
 }
 
-/** Read a ref's content: a target ref reads its artifact's output file; a source reads the file. */
+/**
+ * Read a ref's content: a target ref reads its artifact's output file (always
+ * Markdown); a source reads the file — auto-converting it to Markdown when it is
+ * an importable binary and a {@link ImportResolver} is provided.
+ */
 export async function readRefContent(
   ref: string,
   workspaceDir: string,
   outputs: ReadonlyMap<string, string>,
+  resolver?: ImportResolver,
 ): Promise<string> {
+  const isTarget = outputs.has(ref);
   const path = outputs.get(ref) ?? ref;
   // Confine every interpolated/over read to the workspace (throws on escape).
   const abs = await realResolveInWorkspace(workspaceDir, path);
+  // Only a *source* ref can be importable — a target's artifact is produced Markdown.
+  if (!isTarget && resolver?.isImportable(ref)) {
+    return resolver.resolveText(abs, ref);
+  }
   const bytes = await readFile(abs);
   return new TextDecoder().decode(bytes);
 }

@@ -139,7 +139,8 @@ export function renderWhy(v: WhyView, s: Styler): string {
   }
   for (const i of v.inputs) {
     const kind = i.kind === "target" ? s.cyan(`[${i.kind}]`) : s.dim(`[${i.kind}]`);
-    lines.push(`  ${s.dim("-")} ${i.ref} ${kind} ${s.dim(shortHash(i.hash))}`);
+    const via = i.imported ? ` ${s.dim(`(imported via ${i.imported.importer})`)}` : "";
+    lines.push(`  ${s.dim("-")} ${i.ref} ${kind} ${s.dim(shortHash(i.hash))}${via}`);
   }
 
   const p = v.provenance;

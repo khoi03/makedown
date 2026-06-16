@@ -85,11 +85,24 @@ export interface BuildDoc {
 /** Whether an input reference points at a source file or another target. */
 export type InputKind = "source" | "target";
 
+/**
+ * Provenance for a source that was auto-converted to Markdown on resolve
+ * (in-graph auto-import — a non-Markdown file referenced directly in `inputs:`).
+ */
+export interface ImportedSource {
+  /** Id of the importer that produced the Markdown (e.g. "markitdown"). */
+  readonly importer: string;
+  /** The content-addressed conversion id (bytes + importer + version + hints). */
+  readonly conversionId: string;
+}
+
 /** An input after resolution: its kind and content hash. */
 export interface ResolvedInput {
   readonly ref: string;
   readonly kind: InputKind;
   readonly hash: string; // "sha256:..."
+  /** Set when the source was auto-imported (converted to Markdown on resolve). */
+  readonly imported?: ImportedSource;
 }
 
 export interface TokenUsage {

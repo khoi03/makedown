@@ -18,12 +18,14 @@ import { pathToFileURL } from "node:url";
 import { bareRef } from "@makedown/format";
 import type { Provider } from "@makedown/providers";
 import type { AgentRunner, AgentRunResult } from "@makedown/agents";
+import type { Importer, ImportCacheStore } from "@makedown/import";
 import type { BuildDoc, Provenance, ResolvedInput, StepType, TargetBlock } from "@makedown/shared";
 import { computeIdentityHash, sha256 } from "./hash.js";
 import type { Cas } from "./cas.js";
 import { buildGraph, type BuildGraph } from "./graph.js";
 import { provisionSandbox } from "./sandbox.js";
 import { realResolveInWorkspace, PathEscapeError } from "./paths.js";
+import { ImportResolver } from "./imports.js";
 import { runSandboxedTransform } from "./transform-sandbox.js";
 import { runContainerTransform } from "./transform-container.js";
 import { renderTemplate, readRefContent, parseList } from "./template.js";
@@ -86,6 +88,17 @@ export interface BuildContext {
    */
   readonly approve?: (request: ApprovalRequest) => Promise<boolean>;
   /**
+   * Any-file → Markdown importer for in-graph auto-import: a non-Markdown source
+   * (PDF/DOCX/…) referenced directly in `inputs:` is converted on resolve. Omit to
+   * leave such files unimported (a build that needs one then fails with an
+   * actionable error). See {@link ImportResolver}.
+   */
+  readonly importer?: Importer;
+  /** Conversion cache for auto-import (content-addressed). Omit for an uncached convert. */
+  readonly importCache?: ImportCacheStore;
+  /** Overrides which extensions auto-import. Defaults to {@link DEFAULT_IMPORTABLE_EXTENSIONS}. */
+  readonly importableExtensions?: ReadonlySet<string>;
+  /**
    * Maximum number of items a single `map` step may fan out over.
    * Defaults to {@link DEFAULT_MAP_FANOUT_CAP}. Exceeding it fails the build
    * before any provider call is made.
@@ -121,18 +134,28 @@ export interface BuildPlan {
   readonly ids: ReadonlyMap<string, string>;
 }
 
+/** Build the per-build auto-import resolver from the context (memoizes its probe). */
+function makeImportResolver(ctx: BuildContext): ImportResolver {
+  return new ImportResolver({
+    importer: ctx.importer,
+    importCache: ctx.importCache,
+    importableExtensions: ctx.importableExtensions,
+  });
+}
+
 /** Resolve inputs, compute identity hashes, and detect stale targets. No model calls. */
 export async function planBuild(doc: BuildDoc, ctx: BuildContext): Promise<BuildPlan> {
   const graph = buildGraph(doc);
   const byName = new Map(doc.targets.map((t) => [t.name, t] as const));
   const ids = new Map<string, string>();
   const plans: TargetPlan[] = [];
+  const resolver = makeImportResolver(ctx);
 
   for (const name of graph.order) {
     const target = byName.get(name);
     if (!target) continue;
 
-    const inputs = await resolveInputs(target, ids, ctx);
+    const inputs = await resolveInputs(target, ids, ctx, resolver);
     const id = computeIdentityHash({
       inputHashes: inputs.map((i) => i.hash),
       header: target.header,
@@ -164,6 +187,7 @@ async function resolveInputs(
   target: TargetBlock,
   ids: ReadonlyMap<string, string>,
   ctx: BuildContext,
+  resolver: ImportResolver,
 ): Promise<ResolvedInput[]> {
   const resolved: ResolvedInput[] = [];
   for (const input of target.header.inputs) {
@@ -172,10 +196,18 @@ async function resolveInputs(
     if (depId !== undefined) {
       // Dependency target: its identity hash *is* the input hash.
       resolved.push({ ref, kind: "target", hash: depId });
+      continue;
+    }
+    // Confine the declared path to the workspace before any IO (throws on escape).
+    const abs = await realResolveInWorkspace(ctx.workspaceDir, ref);
+    const bytes = new Uint8Array(await readFile(abs));
+    if (resolver.isImportable(ref)) {
+      // Auto-import: hash the conversion identity so editing the binary OR
+      // upgrading the importer restales downstream.
+      const { hash, imported } = await resolver.inputHash(bytes, ref);
+      resolved.push(imported ? { ref, kind: "source", hash, imported } : { ref, kind: "source", hash });
     } else {
-      const abs = await realResolveInWorkspace(ctx.workspaceDir, ref);
-      const bytes = await readFile(abs);
-      resolved.push({ ref, kind: "source", hash: sha256(new Uint8Array(bytes)) });
+      resolved.push({ ref, kind: "source", hash: sha256(bytes) });
     }
   }
   return resolved;
@@ -221,6 +253,7 @@ export async function runBuild(doc: BuildDoc, ctx: BuildContext): Promise<BuildR
   const plan = await planBuild(doc, ctx);
   const byName = new Map(doc.targets.map((t) => [t.name, t] as const));
   const outputs = new Map(doc.targets.map((t) => [t.name, t.header.output] as const));
+  const resolver = makeImportResolver(ctx);
   const built: string[] = [];
   const reused: string[] = [];
   const denied = new Set<string>();
@@ -240,7 +273,7 @@ export async function runBuild(doc: BuildDoc, ctx: BuildContext): Promise<BuildR
 
     ctx.onProgress?.({ type: "target-start", target: tp.name, stale: tp.stale });
     if (tp.stale) {
-      const accepted = await executeTarget(target, tp, ctx, outputs);
+      const accepted = await executeTarget(target, tp, ctx, outputs, resolver);
       if (accepted) {
         built.push(tp.name);
         ctx.onProgress?.({ type: "target-built", target: tp.name });
@@ -268,22 +301,23 @@ async function executeTarget(
   tp: TargetPlan,
   ctx: BuildContext,
   outputs: ReadonlyMap<string, string>,
+  resolver: ImportResolver,
 ): Promise<boolean> {
   switch (target.header.step) {
     case "chat":
     case "eval":
       await (target.header.cache.kind === "stochastic"
-        ? executeStochasticModelStep(target, tp, ctx, outputs)
-        : executeModelStep(target, tp, ctx, outputs));
+        ? executeStochasticModelStep(target, tp, ctx, outputs, resolver)
+        : executeModelStep(target, tp, ctx, outputs, resolver));
       return true;
     case "transform":
-      await executeTransform(target, tp, ctx, outputs);
+      await executeTransform(target, tp, ctx, outputs, resolver);
       return true;
     case "map":
-      await executeMap(target, tp, ctx, outputs);
+      await executeMap(target, tp, ctx, outputs, resolver);
       return true;
     case "agent":
-      return executeAgentStep(target, tp, ctx, outputs);
+      return executeAgentStep(target, tp, ctx, outputs, resolver);
     default:
       throw new NotImplementedError(
         `step "${target.header.step}" is not implemented yet (target "${target.name}")`,
@@ -333,6 +367,7 @@ async function executeModelStep(
   tp: TargetPlan,
   ctx: BuildContext,
   outputs: ReadonlyMap<string, string>,
+  resolver: ImportResolver,
 ): Promise<void> {
   if (!ctx.provider) {
     throw new Error(
@@ -340,9 +375,9 @@ async function executeModelStep(
     );
   }
 
-  const prompt = await renderTemplate(target.body, ctx.workspaceDir, outputs, false);
+  const prompt = await renderTemplate(target.body, ctx.workspaceDir, outputs, false, undefined, resolver);
   const system = target.header.system
-    ? await renderTemplate(target.header.system, ctx.workspaceDir, outputs, false)
+    ? await renderTemplate(target.header.system, ctx.workspaceDir, outputs, false, undefined, resolver)
     : undefined;
   const start = Date.now();
   const result = await ctx.provider.complete({
@@ -394,6 +429,7 @@ async function executeStochasticModelStep(
   tp: TargetPlan,
   ctx: BuildContext,
   outputs: ReadonlyMap<string, string>,
+  resolver: ImportResolver,
 ): Promise<void> {
   if (!ctx.provider) {
     throw new Error(
@@ -404,9 +440,9 @@ async function executeStochasticModelStep(
   const k = cache.kind === "stochastic" ? cache.n : 1;
   const existing = await ctx.cas.countSamples(tp.id);
 
-  const prompt = await renderTemplate(target.body, ctx.workspaceDir, outputs, false);
+  const prompt = await renderTemplate(target.body, ctx.workspaceDir, outputs, false, undefined, resolver);
   const system = target.header.system
-    ? await renderTemplate(target.header.system, ctx.workspaceDir, outputs, false)
+    ? await renderTemplate(target.header.system, ctx.workspaceDir, outputs, false, undefined, resolver)
     : undefined;
 
   for (let index = existing; index < k; index++) {
@@ -483,6 +519,7 @@ async function executeMap(
   tp: TargetPlan,
   ctx: BuildContext,
   outputs: ReadonlyMap<string, string>,
+  resolver: ImportResolver,
 ): Promise<void> {
   if (!ctx.provider) {
     throw new Error(`No provider configured; cannot execute map target "${target.name}"`);
@@ -492,7 +529,7 @@ async function executeMap(
     throw new Error(`Target "${target.name}" step=map requires an "over" input`);
   }
 
-  const items = parseList(await readRefContent(over, ctx.workspaceDir, outputs));
+  const items = parseList(await readRefContent(over, ctx.workspaceDir, outputs, resolver));
 
   // Cap the fan-out before any provider call so a runaway/untrusted list can't
   // spawn unbounded inference (cost + rate-limit DoS). Fail fast and loud.
@@ -513,9 +550,9 @@ async function executeMap(
   const start = Date.now();
   for (const item of items) {
     const bindings = new Map([["item", item]]);
-    const prompt = await renderTemplate(target.body, ctx.workspaceDir, outputs, false, bindings);
+    const prompt = await renderTemplate(target.body, ctx.workspaceDir, outputs, false, bindings, resolver);
     const system = target.header.system
-      ? await renderTemplate(target.header.system, ctx.workspaceDir, outputs, false, bindings)
+      ? await renderTemplate(target.header.system, ctx.workspaceDir, outputs, false, bindings, resolver)
       : undefined;
     const result = await ctx.provider.complete({
       model: target.header.model ?? "",
@@ -569,14 +606,15 @@ async function executeAgentStep(
   tp: TargetPlan,
   ctx: BuildContext,
   outputs: ReadonlyMap<string, string>,
+  resolver: ImportResolver,
 ): Promise<boolean> {
   if (!ctx.agentRunner) {
     throw new Error(`No agent runner configured; cannot execute agent target "${target.name}"`);
   }
 
-  const prompt = await renderTemplate(target.body, ctx.workspaceDir, outputs, false);
+  const prompt = await renderTemplate(target.body, ctx.workspaceDir, outputs, false, undefined, resolver);
   const system = target.header.system
-    ? await renderTemplate(target.header.system, ctx.workspaceDir, outputs, false)
+    ? await renderTemplate(target.header.system, ctx.workspaceDir, outputs, false, undefined, resolver)
     : undefined;
 
   const sandbox = await provisionSandbox(ctx.workspaceDir, target.header.sandbox);
@@ -660,9 +698,10 @@ async function executeTransform(
   tp: TargetPlan,
   ctx: BuildContext,
   outputs: ReadonlyMap<string, string>,
+  resolver: ImportResolver,
 ): Promise<void> {
   const { absPath, hash } = await resolveTransformScript(target, ctx);
-  const inputs = await resolveInputContents(target, ctx, outputs);
+  const inputs = await resolveInputContents(target, ctx, outputs, resolver);
 
   const start = Date.now();
   const produced = await runTransform(target, absPath, hash, inputs, ctx);
@@ -761,11 +800,12 @@ async function resolveInputContents(
   target: TargetBlock,
   ctx: BuildContext,
   outputs: ReadonlyMap<string, string>,
+  resolver: ImportResolver,
 ): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   for (const input of target.header.inputs) {
     const ref = bareRef(input);
-    out[ref] = await readRefContent(ref, ctx.workspaceDir, outputs);
+    out[ref] = await readRefContent(ref, ctx.workspaceDir, outputs, resolver);
   }
   return out;
 }
@@ -812,9 +852,10 @@ export async function renderTarget(
   const target = doc.targets.find((t) => t.name === name);
   if (!target) throw new Error(`Unknown target: ${name}`);
   const outputs = new Map(doc.targets.map((t) => [t.name, t.header.output] as const));
-  const prompt = await renderTemplate(target.body, ctx.workspaceDir, outputs, true);
+  const resolver = makeImportResolver(ctx);
+  const prompt = await renderTemplate(target.body, ctx.workspaceDir, outputs, true, undefined, resolver);
   const system = target.header.system
-    ? await renderTemplate(target.header.system, ctx.workspaceDir, outputs, true)
+    ? await renderTemplate(target.header.system, ctx.workspaceDir, outputs, true, undefined, resolver)
     : undefined;
   return { system, prompt };
 }

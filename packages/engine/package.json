@@ -24,6 +24,7 @@
     "@makedown/shared": "workspace:*",
     "@makedown/format": "workspace:*",
     "@makedown/providers": "workspace:*",
-    "@makedown/agents": "workspace:*"
+    "@makedown/agents": "workspace:*",
+    "@makedown/import": "workspace:*"
   }
 }

@@ -93,9 +93,41 @@ view it is just text. The conversion is content-addressed (cached on the source
 bytes + importer version), so re-importing unchanged bytes does no work.
 
 > MarkItDown is an **optional external tool** (`pip install 'markitdown[all]'`),
-> invoked as a subprocess — it is not a dependency of the engine. Referencing a
-> binary file *directly* in `inputs:` (auto-import inside the build graph) is
-> reserved; see §11.
+> invoked as a subprocess — it is not a dependency of the engine. To skip the
+> explicit step and reference a binary file *directly* in `inputs:`, see §3.3.
+
+### 3.3 In-graph auto-import
+
+A non-Markdown file may be referenced **directly** in a target's `inputs:` (and
+body, via `{{sources/report.pdf}}`) without a prior `md import`. On resolve, a
+file whose extension is in the **importable set** is converted to Markdown and the
+target consumes that Markdown — the engine never decodes the raw bytes as text.
+
+```yaml
+inputs: [sources/report.pdf]   # converted to Markdown on resolve
+step: chat
+```
+
+- **Importable set (allow-list):** `.pdf`, `.docx`, `.doc`, `.pptx`, `.ppt`,
+  `.xlsx`, `.xls`, `.epub`, `.html`, `.htm`, and common image types. Everything
+  else — including `.md`, `.txt`, `.csv`, `.json`, `.yaml` — is read **as-is**, so
+  existing builds are unaffected. (The host may override the set.)
+- **Determinism & caching:** the target's identity hash folds in the *conversion
+  identity* — `hash(source bytes + importer id + importer version + format hints)`
+  — so editing the binary **or** upgrading the importer restales the target and
+  everything downstream. The conversion itself is cached under
+  `.makedown/imports/` by the same identity, so an unchanged file is converted at
+  most once. This is the same content-addressed cache the explicit `md import`
+  uses, so the two forms share results.
+- **Path confinement:** the file is named in `build.md` (author-controlled), so
+  its path is confined to the workspace before any IO — a `..`-escape in `inputs:`
+  is rejected.
+- **Provenance:** `md why` marks an auto-imported input with the importer id and
+  its conversion id.
+- **Tool absence:** MarkItDown is optional. `md status`/`md cost` still work
+  (the importable input falls back to a raw-bytes hash); an actual `md build` that
+  needs the converter without it installed fails with a `pip install` hint, never
+  a stack trace.
 
 ---
 
@@ -394,9 +426,6 @@ A conforming **engine** MUST:
 - `:fn(args)` body transforms beyond `head`/`tail`.
 - `when:` conditional targets; `matrix:` parameter sweeps.
 - Remote/imported sub-graphs (`import:`).
-- In-graph auto-import: a non-Markdown file referenced directly in `inputs:`,
-  converted on resolve (cached by content hash) so editing the binary rebuilds
-  downstream — see §3.2 for the explicit `md import` form available today.
 - Signed provenance for externally shared artifacts.
 
 Changes are tracked in this file's version header; pre-1.0 may break.

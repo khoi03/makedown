@@ -7,6 +7,7 @@ import { resolveMaxTokens, estimateCostUsd, parseModelRef } from "@makedown/prov
 import type { BuildDoc, StepType, TargetBlock } from "@makedown/shared";
 import { planBuild, type BuildContext, type TargetPlan } from "./build.js";
 import { renderTemplate, readRefContent, parseList } from "./template.js";
+import { ImportResolver } from "./imports.js";
 
 const CHARS_PER_TOKEN = 4;
 
@@ -49,6 +50,11 @@ export async function estimateBuildCost(doc: BuildDoc, ctx: BuildContext): Promi
   const plan = await planBuild(doc, ctx);
   const byName = new Map(doc.targets.map((t) => [t.name, t] as const));
   const outputs = new Map(doc.targets.map((t) => [t.name, t.header.output] as const));
+  const resolver = new ImportResolver({
+    importer: ctx.importer,
+    importCache: ctx.importCache,
+    importableExtensions: ctx.importableExtensions,
+  });
 
   const targets: TargetCost[] = [];
   let totalCostUsd = 0;
@@ -57,7 +63,7 @@ export async function estimateBuildCost(doc: BuildDoc, ctx: BuildContext): Promi
   for (const tp of plan.targets) {
     const target = byName.get(tp.name);
     if (!target) continue;
-    const cost = await costForTarget(target, tp, ctx, outputs);
+    const cost = await costForTarget(target, tp, ctx, outputs, resolver);
     targets.push(cost);
     if (tp.stale && isModelStep(target.header.step)) {
       if (cost.costUsd === undefined) hasUnpriced = true;
@@ -72,6 +78,7 @@ async function costForTarget(
   tp: TargetPlan,
   ctx: BuildContext,
   outputs: ReadonlyMap<string, string>,
+  resolver: ImportResolver,
 ): Promise<TargetCost> {
   const step = target.header.step;
   const common = { target: target.name, step, model: target.header.model, stale: tp.stale };
@@ -83,8 +90,8 @@ async function costForTarget(
   const maxPerCall = resolveMaxTokens(target.header.params);
 
   if (step === "map") {
-    const items = target.header.over ? await safeList(target.header.over, ctx, outputs) : [];
-    const perItem = await renderForCost(target, ctx, outputs, items[0] ?? "");
+    const items = target.header.over ? await safeList(target.header.over, ctx, outputs, resolver) : [];
+    const perItem = await renderForCost(target, ctx, outputs, items[0] ?? "", resolver);
     const inputTokens = estimateTokens(perItem) * items.length;
     const maxOutputTokens = maxPerCall * items.length;
     return {
@@ -97,7 +104,7 @@ async function costForTarget(
   }
 
   // chat | eval
-  const inputTokens = estimateTokens(await renderForCost(target, ctx, outputs, undefined));
+  const inputTokens = estimateTokens(await renderForCost(target, ctx, outputs, undefined, resolver));
   return {
     ...common,
     calls: 1,
@@ -113,11 +120,12 @@ async function renderForCost(
   ctx: BuildContext,
   outputs: ReadonlyMap<string, string>,
   item: string | undefined,
+  resolver: ImportResolver,
 ): Promise<string> {
   const bindings = item !== undefined ? new Map([["item", item]]) : undefined;
-  const prompt = await renderTemplate(target.body, ctx.workspaceDir, outputs, true, bindings);
+  const prompt = await renderTemplate(target.body, ctx.workspaceDir, outputs, true, bindings, resolver);
   const system = target.header.system
-    ? await renderTemplate(target.header.system, ctx.workspaceDir, outputs, true, bindings)
+    ? await renderTemplate(target.header.system, ctx.workspaceDir, outputs, true, bindings, resolver)
     : "";
   return `${system}\n${prompt}`;
 }
@@ -126,9 +134,10 @@ async function safeList(
   over: string,
   ctx: BuildContext,
   outputs: ReadonlyMap<string, string>,
+  resolver: ImportResolver,
 ): Promise<string[]> {
   try {
-    return parseList(await readRefContent(over, ctx.workspaceDir, outputs));
+    return parseList(await readRefContent(over, ctx.workspaceDir, outputs, resolver));
   } catch {
     return [];
   }

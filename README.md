@@ -93,6 +93,22 @@ same bytes is served from cache with no second conversion. The output is written
 *inside* the workspace (so it stays confined there); the named input is read
 as-is. [`examples/import`](./examples/import) is a runnable, key-free tour.
 
+**Skip the step — reference a binary directly.** A non-Markdown file named
+straight in a target's `inputs:` (or body, via `{{sources/report.pdf}}`) is
+**auto-imported on resolve** — converted to Markdown as part of the build, cached
+by content hash, and path-confined. Editing the file *or* upgrading MarkItDown
+restales the target and everything downstream (the conversion identity is folded
+into the target's identity hash). Native text — `.md`, `.txt`, `.csv`, `.json`,
+`.yaml` — is read as-is; only the rich/binary allow-list (PDF/DOCX/PPTX/XLSX/HTML/
+EPUB/images) auto-converts. See [`examples/import-graph`](./examples/import-graph)
+(key-free) and SPEC §3.3.
+
+```yaml
+## target: brief
+inputs: [sources/report.pdf]   # ← converted on resolve, no `md import` needed
+step: chat
+```
+
 In the **collaborative workbench**, the same capability is an **"Import file"**
 button in the `build.md` pane: pick a file, and the converted source lands in the
 workspace (live in the doc + on disk) with the `{{sources/…}}` reference shown to
