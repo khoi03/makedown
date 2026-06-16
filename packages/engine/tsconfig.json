@@ -9,6 +9,7 @@
     { "path": "../shared" },
     { "path": "../format" },
     { "path": "../providers" },
-    { "path": "../agents" }
+    { "path": "../agents" },
+    { "path": "../import" }
   ]
 }

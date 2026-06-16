@@ -34,6 +34,12 @@ export {
   PathEscapeError,
 } from "./paths.js";
 export {
+  ImportResolver,
+  DEFAULT_IMPORTABLE_EXTENSIONS,
+  type ImportResolverOptions,
+  type InputHashResult,
+} from "./imports.js";
+export {
   estimateBuildCost,
   estimateTokens,
   type TargetCost,
