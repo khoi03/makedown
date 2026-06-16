@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, cleanup } from "@testing-library/react";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { basicSetup } from "codemirror";
@@ -43,9 +43,11 @@ describe("EditorPane binding (reload-scramble repro)", () => {
     const doc = new Y.Doc();
     const awareness = new Awareness(doc);
     const source = doc.getMap<Y.Text>("sources").set("sources/r.md", new Y.Text());
-    source.insert(0, "# Report");
-    render(<EditorPane text={source} awareness={awareness} />);
-    expect(screen.getByText("# Report")).toBeInTheDocument();
+    source.insert(0, "report body");
+    const { container } = render(<EditorPane text={source} awareness={awareness} />);
+    // The editor seeds its content from the bound text — proving it follows the
+    // passed source Y.Text rather than the hardcoded build.md.
+    expect(container.querySelector(".cm-content")?.textContent).toContain("report body");
   });
 
   it("writes an editor edit back to the Y.Text at the correct position (no scramble)", () => {
