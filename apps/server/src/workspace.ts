@@ -106,18 +106,31 @@ function hasAnyProvider(env: Env): boolean {
 
 /**
  * The any-file → Markdown importer + content-addressed cache that power in-graph
- * auto-import (a non-Markdown file named directly in `inputs:`). Built per
- * workspace; the MarkItDown tool is probed lazily, only when such an input
- * appears. The server host must have MarkItDown installed for binary inputs.
+ * auto-import (a non-Markdown file named directly in `inputs:`). The MarkItDown
+ * tool is probed lazily, only when such an input appears. The server host must
+ * have MarkItDown installed for binary inputs.
+ *
+ * Memoized per workspace dir: the long-lived server hits graph/cost/build many
+ * times, and a fresh importer per request would re-spawn the `--version` probe
+ * each time (the importer memoizes its version only within one instance). The
+ * importer + cache are stateless/idempotent, so sharing them is safe under
+ * concurrent requests.
  */
+const importDepsByDir = new Map<string, { importer: Importer; importCache: ImportCacheStore }>();
+
 export function makeImportDeps(dir: string): {
   importer: Importer;
   importCache: ImportCacheStore;
 } {
-  return {
-    importer: new MarkItDownImporter({ command: markitdownCommandFromEnv() }),
-    importCache: new FileImportCache(join(dir, ".makedown", "imports")),
-  };
+  let deps = importDepsByDir.get(dir);
+  if (!deps) {
+    deps = {
+      importer: new MarkItDownImporter({ command: markitdownCommandFromEnv() }),
+      importCache: new FileImportCache(join(dir, ".makedown", "imports")),
+    };
+    importDepsByDir.set(dir, deps);
+  }
+  return deps;
 }
 
 /** Progress + approval hooks injected by the build manager. */
