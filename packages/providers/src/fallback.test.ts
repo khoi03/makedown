@@ -73,7 +73,8 @@ describe("runWithFallback", () => {
       if (m === "a") throw new ProviderError("429", "rate_limit", "anthropic", 429);
       return ok();
     });
-    const result = await runWithFallback(["a", "b"], run);
+    // maxAttemptsPerModel:1 isolates advance behavior (per-model retry is tested below).
+    const result = await runWithFallback(["a", "b"], run, { retry: { maxAttemptsPerModel: 1 } });
     expect(result.model).toBe("b");
     expect(run).toHaveBeenCalledTimes(2);
   });
@@ -90,14 +91,73 @@ describe("runWithFallback", () => {
     const run = vi.fn(async (m: string) => {
       throw new ProviderError(`${m} down`, "overload", "x", 503);
     });
-    await expect(runWithFallback(["a", "b"], run)).rejects.toThrow(
-      /All 2 models failed.*a.*overload.*b.*overload/s,
-    );
+    await expect(
+      runWithFallback(["a", "b"], run, { retry: { maxAttemptsPerModel: 1 } }),
+    ).rejects.toThrow(/All 2 models failed.*a.*overload.*b.*overload/s);
     expect(run).toHaveBeenCalledTimes(2);
   });
 
   it("rethrows the raw error for a single-candidate chain", async () => {
     const err = new ProviderError("nope", "rate_limit", "x", 429);
-    await expect(runWithFallback(["a"], async () => Promise.reject(err))).rejects.toBe(err);
+    await expect(
+      runWithFallback(["a"], async () => Promise.reject(err), { sleep: async () => {} }),
+    ).rejects.toBe(err);
+  });
+});
+
+describe("runWithFallback per-model retry/backoff", () => {
+  const noSleep = async (): Promise<void> => {};
+
+  it("retries the SAME model on a transient error, then succeeds (never demotes)", async () => {
+    let calls = 0;
+    const run = vi.fn(async () => {
+      calls += 1;
+      if (calls < 3) throw new ProviderError("rl", "rate_limit", "x", 429);
+      return ok();
+    });
+    const result = await runWithFallback(["a", "b"], run, { sleep: noSleep });
+    expect(result.model).toBe("a"); // succeeded on the requested model
+    expect(run).toHaveBeenCalledTimes(3); // 2 transient failures + 1 success, all on "a"
+  });
+
+  it("advances to the next model after exhausting same-model attempts", async () => {
+    const run = vi.fn(async (m: string) => {
+      if (m === "a") throw new ProviderError("rl", "rate_limit", "x", 429);
+      return ok();
+    });
+    const result = await runWithFallback(["a", "b"], run, {
+      sleep: noSleep,
+      retry: { maxAttemptsPerModel: 2 },
+    });
+    expect(result.model).toBe("b");
+    expect(run.mock.calls.filter((c) => c[0] === "a")).toHaveLength(2); // exhausted on "a"
+    expect(run).toHaveBeenCalledTimes(3);
+  });
+
+  it("does NOT retry the same model when it is unavailable — advances immediately", async () => {
+    const run = vi.fn(async (m: string) => {
+      if (m === "a") throw new ProviderError("404", "unavailable", "x", 404);
+      return ok();
+    });
+    const result = await runWithFallback(["a", "b"], run, { sleep: noSleep });
+    expect(result.model).toBe("b");
+    expect(run.mock.calls.filter((c) => c[0] === "a")).toHaveLength(1); // no same-model retry
+  });
+
+  it("sleeps the provider's Retry-After hint before retrying the same model", async () => {
+    const delays: number[] = [];
+    const sleep = async (ms: number): Promise<void> => {
+      delays.push(ms);
+    };
+    let calls = 0;
+    const run = async (): Promise<CompletionResult> => {
+      calls += 1;
+      if (calls === 1) {
+        throw new ProviderError("rl", "rate_limit", "x", 429, { retryAfterMs: 4000 });
+      }
+      return ok();
+    };
+    await runWithFallback(["a"], run, { sleep });
+    expect(delays).toEqual([4000]);
   });
 });
