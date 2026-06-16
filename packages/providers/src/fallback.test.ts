@@ -144,6 +144,13 @@ describe("runWithFallback per-model retry/backoff", () => {
     expect(run.mock.calls.filter((c) => c[0] === "a")).toHaveLength(1); // no same-model retry
   });
 
+  it("makes at least one attempt even if misconfigured with maxAttemptsPerModel < 1", async () => {
+    const run = vi.fn(async () => ok());
+    const result = await runWithFallback(["a"], run, { retry: { maxAttemptsPerModel: 0 } });
+    expect(result.model).toBe("a");
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
   it("sleeps the provider's Retry-After hint before retrying the same model", async () => {
     const delays: number[] = [];
     const sleep = async (ms: number): Promise<void> => {

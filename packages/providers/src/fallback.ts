@@ -85,7 +85,9 @@ export async function runWithFallback(
   run: (model: string) => Promise<CompletionResult>,
   options: FallbackOptions = {},
 ): Promise<CompletionResult> {
-  const policy: RetryPolicy = { ...DEFAULT_RETRY_POLICY, ...options.retry };
+  const merged: RetryPolicy = { ...DEFAULT_RETRY_POLICY, ...options.retry };
+  // Always make at least one attempt, even if misconfigured with 0/negative.
+  const policy: RetryPolicy = { ...merged, maxAttemptsPerModel: Math.max(1, merged.maxAttemptsPerModel) };
   const sleep = options.sleep ?? realSleep;
   const rand = options.rand ?? Math.random;
   const failures: { readonly model: string; readonly error: unknown }[] = [];

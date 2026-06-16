@@ -121,4 +121,19 @@ describe("OpenAICompatibleProvider", () => {
       provider.complete({ model: "m", prompt: "p", params: {} }),
     ).rejects.toMatchObject({ name: "ProviderError", kind: "timeout", provider: "openai" });
   });
+
+  it("captures a Retry-After header into ProviderError.retryAfterMs", async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 429,
+      statusText: "Too Many Requests",
+      headers: new Headers({ "retry-after": "2" }),
+      text: async () => "slow down",
+      json: async () => ({}),
+    });
+    const provider = new OpenAICompatibleProvider({ apiKey: "k" });
+    await expect(
+      provider.complete({ model: "m", prompt: "p", params: {} }),
+    ).rejects.toMatchObject({ kind: "rate_limit", retryAfterMs: 2000 });
+  });
 });
