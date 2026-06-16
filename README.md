@@ -110,9 +110,9 @@ step: chat
 ```
 
 In the **collaborative workbench**, the same capability is an **"Import file"**
-button in the `build.md` pane: pick a file, and the converted source lands in the
+button in the **Files** pane: pick a file, and the converted source lands in the
 workspace (live in the doc + on disk) with the `{{sources/…}}` reference shown to
-paste. The server runs MarkItDown the same way, so it must be installed on the
+paste — and it opens in the editor automatically. The server runs MarkItDown the same way, so it must be installed on the
 **server host** (`pip install 'markitdown[all]'`, or set `MAKEDOWN_MARKITDOWN_CMD=python -m markitdown`);
 uploads are size-capped and writing the source requires the `member` role when
 auth is enabled.
@@ -164,7 +164,7 @@ makedown/
 │   ├── import/             # [OSS] any-file → Markdown importer (MarkItDown bridge) + conversion cache
 │   ├── cli/                # [OSS] the `md` command
 │   ├── sync/               # [AGPL-3.0] Yjs CRDT doc model + git backing + WebSocket sync server
-│   └── web/                # [AGPL-3.0] React collaborative workbench (editor + DAG + inspector)
+│   └── web/                # [AGPL-3.0] React collaborative workbench (files + editor + DAG + inspector)
 └── apps/
     └── server/             # [AGPL-3.0] Fastify API: build orchestration, SSE, snapshots/branches
 ```
@@ -267,8 +267,9 @@ pnpm --filter @makedown/web dev
 #   to one directly: http://localhost:5173/#/quickstart
 ```
 
-In the workbench: edit `build.md` on the left (open the same URL in two tabs to
-see live co-editing + presence cursors); the **DAG** updates as you type; click
+In the workbench: the left **Files** pane lists `build.md` plus every source —
+click one to open it in the collaborative editor (open the same URL in two tabs to
+see live co-editing + presence cursors on any file); the **DAG** updates as you type; click
 **Build** to run — stale targets recompute and stream status onto the graph;
 click a node to inspect its **artifact / provenance / cost**; **Snapshot** commits
 the current state to git; the branch chip switches/creates branches. An `agent`
