@@ -25,23 +25,63 @@ const RETRYABLE_KINDS: ReadonlySet<ProviderErrorKind> = new Set<ProviderErrorKin
   "unavailable",
 ]);
 
+/**
+ * Kinds worth retrying on the *same* model after a short backoff: transient
+ * load / throttling / network blips that a brief wait typically clears. Excludes
+ * `unavailable` (a missing/unconfigured model won't materialize on retry — the
+ * router should advance immediately) and all fatal kinds.
+ */
+const RETRY_SAME_MODEL_KINDS: ReadonlySet<ProviderErrorKind> = new Set<ProviderErrorKind>([
+  "rate_limit",
+  "overload",
+  "server",
+  "timeout",
+]);
+
 /** A normalized error from a provider adapter. */
 export class ProviderError extends Error {
+  /** Provider-suggested wait before retrying (from a `Retry-After` header), in ms. */
+  readonly retryAfterMs?: number;
+
   constructor(
     message: string,
     readonly kind: ProviderErrorKind,
     readonly provider: string,
     readonly status?: number,
-    options?: { readonly cause?: unknown },
+    options?: { readonly cause?: unknown; readonly retryAfterMs?: number },
   ) {
     super(message, options);
     this.name = "ProviderError";
+    this.retryAfterMs = options?.retryAfterMs;
   }
 }
 
 /** True when the error is transient and a different model is worth trying. */
 export function isRetryable(error: unknown): boolean {
   return error instanceof ProviderError && RETRYABLE_KINDS.has(error.kind);
+}
+
+/** True when retrying the *same* model after a backoff is worthwhile. */
+export function shouldRetrySameModel(error: unknown): boolean {
+  return error instanceof ProviderError && RETRY_SAME_MODEL_KINDS.has(error.kind);
+}
+
+/**
+ * Parse an HTTP `Retry-After` value into milliseconds. Accepts a raw header
+ * string, a `Headers`-like object (anything with a `.get`), or undefined.
+ * Supports the delta-seconds form (e.g. `"5"`); an HTTP-date form resolves to
+ * the delay from now (never negative). Returns undefined when absent/unparseable.
+ */
+export function parseRetryAfter(source: string | { get(name: string): string | null } | undefined): number | undefined {
+  const raw = typeof source === "string" ? source : source?.get("retry-after") ?? undefined;
+  if (raw == null || raw.trim() === "") return undefined;
+
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds)) return Math.max(0, Math.round(seconds * 1000));
+
+  const when = Date.parse(raw);
+  if (!Number.isNaN(when)) return Math.max(0, when - Date.now());
+  return undefined;
 }
 
 /** Map an HTTP status code to a provider-error kind. */

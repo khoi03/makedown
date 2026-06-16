@@ -10,19 +10,28 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { CompletionRequest, CompletionResult, Provider } from "./provider.js";
 import { resolveMaxTokens } from "./params.js";
-import { ProviderError, kindFromStatus } from "./errors.js";
+import { ProviderError, kindFromStatus, parseRetryAfter } from "./errors.js";
 import { estimateCostUsd, normalizeModelId } from "./pricing.js";
 
 // Re-exported for back-compat: pricing now lives in pricing.ts (shared with the
 // cost-aware fallback ordering), but these were originally exported from here.
 export { estimateCostUsd, normalizeModelId };
 
+/** Pull a `Retry-After` hint (ms) off an SDK error's headers, if present. */
+function retryAfterOf(err: unknown): number | undefined {
+  const headers = (err as { headers?: unknown })?.headers;
+  if (headers && typeof (headers as { get?: unknown }).get === "function") {
+    return parseRetryAfter(headers as { get(name: string): string | null });
+  }
+  return undefined;
+}
+
 /** Translate an Anthropic SDK / network failure into a classified ProviderError. */
 function toProviderError(err: unknown): ProviderError {
   if (err instanceof ProviderError) return err;
   const status = (err as { status?: unknown })?.status;
   if (typeof status === "number") {
-    return new ProviderError(messageOf(err, `Anthropic request failed (${status})`), kindFromStatus(status), "anthropic", status, { cause: err });
+    return new ProviderError(messageOf(err, `Anthropic request failed (${status})`), kindFromStatus(status), "anthropic", status, { cause: err, retryAfterMs: retryAfterOf(err) });
   }
   // Connection/timeout/abort errors carry no status — treat as a transient timeout.
   const name = (err as { name?: unknown })?.name;

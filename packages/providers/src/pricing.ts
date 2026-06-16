@@ -28,10 +28,18 @@ const PRICING: Readonly<Record<string, Rate>> = {
  * OpenAI-compatible endpoint (OpenRouter, Groq, …) may differ, so these don't
  * feed `estimateCostUsd`. Unknown models stay unpriced (sorted last). Extend as
  * needed; provide a confirmed rate to add a model.
+ *
+ * Confirmed list prices, cached 2026-06-16 (USD per 1M tokens). Update when
+ * OpenAI changes them — staleness only mis-orders fallbacks, never misreports cost.
  */
 const OPENAI_ORDERING_PRICING: Readonly<Record<string, Rate>> = {
   "gpt-4o": { input: 2.5, output: 10 },
   "gpt-4o-mini": { input: 0.15, output: 0.6 },
+  "gpt-4.1": { input: 2, output: 8 },
+  "gpt-4.1-mini": { input: 0.4, output: 1.6 },
+  "gpt-4.1-nano": { input: 0.1, output: 0.4 },
+  o3: { input: 2, output: 8 },
+  "o4-mini": { input: 1.1, output: 4.4 },
 };
 
 /** Strip a trailing `-YYYYMMDD` model-snapshot suffix (e.g. `claude-haiku-4-5-20251001`). */

@@ -47,4 +47,19 @@ describe("blendedPrice with dated ids + OpenAI ordering prices", () => {
   it("leaves an unknown OpenAI model unpriced (no fabrication → sorts last)", () => {
     expect(blendedPrice("openai:some-unlisted-model", "anthropic")).toBeUndefined();
   });
+
+  it.each([
+    ["openai:gpt-4.1", 5], // (2 + 8) / 2
+    ["openai:gpt-4.1-mini", 1], // (0.4 + 1.6) / 2
+    ["openai:gpt-4.1-nano", 0.25], // (0.1 + 0.4) / 2
+    ["openai:o3", 5], // (2 + 8) / 2
+    ["openai:o4-mini", 2.75], // (1.1 + 4.4) / 2
+  ] as const)("orders %s by its confirmed June-2026 list price", (ref, blended) => {
+    expect(blendedPrice(ref, "anthropic")).toBeCloseTo(blended, 5);
+  });
+
+  it("still never reports a COST for the broadened OpenAI models (ordering only)", () => {
+    expect(estimateCostUsd("gpt-4.1", 1_000_000, 1_000_000)).toBeUndefined();
+    expect(estimateCostUsd("o4-mini", 1_000_000, 1_000_000)).toBeUndefined();
+  });
 });

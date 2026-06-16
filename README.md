@@ -36,11 +36,13 @@ fallback: [anthropic:claude-sonnet-4-6, openai:gpt-5]
 route: cost-aware    # optional — sort the fallbacks cheapest-first
 ```
 
-The router tries the primary first, advances down the chain only on transient
-errors (failing fast on bad-request/auth), and records the model that **actually**
-produced the artifact in provenance (`md why` shows a "fell back from …" note when
-it differs). The `fallback`/`route` spec is part of the identity hash, so caching
-stays deterministic regardless of which model answered (see [`SPEC.md`](./SPEC.md) §4.2).
+The router tries the primary first, and on a transient load/throttle/network
+error it **retries the same model** with exponential backoff + jitter (honoring a
+`Retry-After` header) before advancing down the chain — failing fast on
+bad-request/auth. It records the model that **actually** produced the artifact in
+provenance (`md why` shows a "fell back from …" note when it differs). The
+`fallback`/`route` spec is part of the identity hash, so caching stays
+deterministic regardless of which model answered (see [`SPEC.md`](./SPEC.md) §4.2).
 
 ## Step types
 

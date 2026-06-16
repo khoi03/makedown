@@ -1,5 +1,58 @@
 import { describe, it, expect } from "vitest";
-import { ProviderError, isRetryable, kindFromStatus } from "./errors.js";
+import {
+  ProviderError,
+  isRetryable,
+  kindFromStatus,
+  shouldRetrySameModel,
+  parseRetryAfter,
+} from "./errors.js";
+
+describe("shouldRetrySameModel", () => {
+  it.each(["rate_limit", "overload", "server", "timeout"] as const)(
+    "retries the same model on transient load/throttle/network error (%s)",
+    (kind) => {
+      expect(shouldRetrySameModel(new ProviderError("x", kind, "anthropic"))).toBe(true);
+    },
+  );
+
+  it("does NOT retry the same model when the model is unavailable (advance instead)", () => {
+    expect(shouldRetrySameModel(new ProviderError("x", "unavailable", "anthropic"))).toBe(false);
+  });
+
+  it.each(["auth", "bad_request", "unknown"] as const)("does not retry fatal kinds (%s)", (kind) => {
+    expect(shouldRetrySameModel(new ProviderError("x", kind, "anthropic"))).toBe(false);
+  });
+
+  it("does not retry plain errors", () => {
+    expect(shouldRetrySameModel(new Error("boom"))).toBe(false);
+  });
+});
+
+describe("ProviderError.retryAfterMs", () => {
+  it("carries an optional retry-after hint", () => {
+    const err = new ProviderError("rl", "rate_limit", "openai", 429, { retryAfterMs: 2000 });
+    expect(err.retryAfterMs).toBe(2000);
+    expect(err.kind).toBe("rate_limit");
+  });
+});
+
+describe("parseRetryAfter", () => {
+  it("parses delta-seconds into milliseconds", () => {
+    expect(parseRetryAfter("2")).toBe(2000);
+    expect(parseRetryAfter("0")).toBe(0);
+  });
+
+  it("reads from a Headers-like getter", () => {
+    const headers = new Headers({ "retry-after": "3" });
+    expect(parseRetryAfter(headers)).toBe(3000);
+  });
+
+  it("returns undefined for missing/garbage values", () => {
+    expect(parseRetryAfter(undefined)).toBeUndefined();
+    expect(parseRetryAfter("not-a-number")).toBeUndefined();
+    expect(parseRetryAfter(new Headers())).toBeUndefined();
+  });
+});
 
 describe("kindFromStatus", () => {
   it.each([
