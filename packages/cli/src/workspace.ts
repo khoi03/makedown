@@ -5,6 +5,7 @@ import { parseBuildDoc } from "@makedown/format";
 import { LocalCas, type BuildContext } from "@makedown/engine";
 import { createProviderRouter, type ProviderRouterConfig } from "@makedown/providers";
 import { ClaudeCodeAgentRunner } from "@makedown/agents";
+import { MarkItDownImporter, FileImportCache, markitdownCommandFromEnv } from "@makedown/import";
 import type { BuildDoc } from "@makedown/shared";
 import { createInteractiveApprover } from "./approve.js";
 
@@ -48,12 +49,21 @@ export function routerConfigFromEnv(): ProviderRouterConfig {
  */
 export function makeContext(dir: string, withProvider = false): BuildContext {
   const cas = new LocalCas(join(dir, ".makedown"));
-  if (!withProvider) return { workspaceDir: dir, cas };
+  // The any-file → Markdown importer powers in-graph auto-import: a non-Markdown
+  // file named directly in `inputs:` is converted on resolve. Wired into every
+  // context (incl. plan-only) so `md status`/`md cost` hash imported inputs
+  // correctly; the MarkItDown tool is probed lazily, only when such an input
+  // actually appears, so workspaces without binary inputs pay nothing.
+  const importer = new MarkItDownImporter({ command: markitdownCommandFromEnv() });
+  const importCache = new FileImportCache(join(dir, ".makedown", "imports"));
+  if (!withProvider) return { workspaceDir: dir, cas, importer, importCache };
   return {
     workspaceDir: dir,
     cas,
     provider: createProviderRouter(routerConfigFromEnv()),
     agentRunner: new ClaudeCodeAgentRunner(),
     approve: createInteractiveApprover(),
+    importer,
+    importCache,
   };
 }

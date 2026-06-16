@@ -171,6 +171,29 @@ describe("renderWhy", () => {
     expect(out).toContain("sources/notes.md");
   });
 
+  it("marks an auto-imported input with its importer", () => {
+    const out = renderWhy(
+      {
+        name: "brief",
+        id: "sha256:abc",
+        stale: false,
+        step: "chat",
+        cache: "deterministic",
+        inputs: [
+          {
+            ref: "sources/report.pdf",
+            kind: "source",
+            hash: "sha256:conv123",
+            imported: { importer: "markitdown", conversionId: "sha256:conv123" },
+          },
+        ],
+      },
+      plain,
+    );
+    expect(out).toContain("sources/report.pdf");
+    expect(out).toContain("imported via markitdown");
+  });
+
   it("notes missing provenance and shows sample counts", () => {
     const out = renderWhy(
       {

@@ -10,6 +10,13 @@ import { parseBuildDoc } from "@makedown/format";
 import { LocalCas, type BuildContext, type BuildEvent, type ApprovalRequest } from "@makedown/engine";
 import { createProviderRouter, type ProviderRouterConfig } from "@makedown/providers";
 import { ClaudeCodeAgentRunner } from "@makedown/agents";
+import {
+  MarkItDownImporter,
+  FileImportCache,
+  markitdownCommandFromEnv,
+  type Importer,
+  type ImportCacheStore,
+} from "@makedown/import";
 import type { BuildDoc } from "@makedown/shared";
 
 const BUILD_FILE = "build.md";
@@ -97,6 +104,22 @@ function hasAnyProvider(env: Env): boolean {
   return Boolean(env["ANTHROPIC_API_KEY"] || env["OPENAI_API_KEY"]);
 }
 
+/**
+ * The any-file → Markdown importer + content-addressed cache that power in-graph
+ * auto-import (a non-Markdown file named directly in `inputs:`). Built per
+ * workspace; the MarkItDown tool is probed lazily, only when such an input
+ * appears. The server host must have MarkItDown installed for binary inputs.
+ */
+export function makeImportDeps(dir: string): {
+  importer: Importer;
+  importCache: ImportCacheStore;
+} {
+  return {
+    importer: new MarkItDownImporter({ command: markitdownCommandFromEnv() }),
+    importCache: new FileImportCache(join(dir, ".makedown", "imports")),
+  };
+}
+
 /** Progress + approval hooks injected by the build manager. */
 export interface ServerContextHooks {
   readonly onProgress: (event: BuildEvent) => void;
@@ -127,6 +150,7 @@ export function makeServerContext(
     cas: new LocalCas(join(dir, ".makedown")),
     provider: withProvider ? createProviderRouter(routerConfigFromEnv(env)) : undefined,
     agentRunner: withProvider ? new ClaudeCodeAgentRunner() : undefined,
+    ...makeImportDeps(dir),
     onProgress: hooks.onProgress,
     approve: hooks.approve,
     maxMapFanout: opts.maxMapFanout,
