@@ -26,6 +26,28 @@ describe("ImportControl", () => {
     expect(await screen.findByText("{{sources/report.md}}")).toBeInTheDocument();
   });
 
+  it("notifies onImported with the new source path so it can be opened", async () => {
+    const result: ImportedSource = { path: "sources/report.md", cached: false, chars: 42 };
+    const importSource = vi.fn().mockResolvedValue(result);
+    const onImported = vi.fn();
+    render(<ImportControl api={fakeApi({ importSource })} workspaceId="w1" onImported={onImported} />);
+
+    selectFile(new File(["%PDF fake"], "report.pdf", { type: "application/pdf" }));
+
+    await waitFor(() => expect(onImported).toHaveBeenCalledWith("sources/report.md"));
+  });
+
+  it("does not call onImported when the import fails", async () => {
+    const importSource = vi.fn().mockRejectedValue(new Error("boom"));
+    const onImported = vi.fn();
+    render(<ImportControl api={fakeApi({ importSource })} workspaceId="w1" onImported={onImported} />);
+
+    selectFile(new File(["x"], "x.pdf"));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(onImported).not.toHaveBeenCalled();
+  });
+
   it("indicates when the result came from the conversion cache", async () => {
     const importSource = vi.fn().mockResolvedValue({ path: "sources/x.md", cached: true, chars: 1 });
     render(<ImportControl api={fakeApi({ importSource })} workspaceId="w1" />);
