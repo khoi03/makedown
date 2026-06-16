@@ -12,8 +12,9 @@
  */
 import type { RoutePolicy } from "@makedown/shared";
 import type { CompletionResult } from "./provider.js";
-import { ProviderError, isRetryable } from "./errors.js";
+import { ProviderError, isRetryable, shouldRetrySameModel } from "./errors.js";
 import { blendedPrice } from "./pricing.js";
+import { DEFAULT_RETRY_POLICY, backoffDelayMs, realSleep, type RetryPolicy, type Sleep } from "./retry.js";
 
 /**
  * Build the ordered candidate chain. The declared primary always runs first
@@ -57,28 +58,59 @@ function dedupe(refs: readonly string[]): string[] {
   return out;
 }
 
+/** Tuning + test seams for {@link runWithFallback}. */
+export interface FallbackOptions {
+  /** Overrides merged over {@link DEFAULT_RETRY_POLICY}. */
+  readonly retry?: Partial<RetryPolicy>;
+  /** Injectable delay (tests pass a no-op so they never actually wait). */
+  readonly sleep?: Sleep;
+  /** Injectable RNG for deterministic jitter in tests. */
+  readonly rand?: () => number;
+}
+
 /**
  * Walk the chain, calling `run(model)` for each candidate. Returns the first
- * success (stamping `model` when the runner left it blank). Advances on a
- * retryable error; on a fatal error or chain exhaustion it throws — the raw error
- * for a single failed attempt, or an aggregate summarizing every attempt.
+ * success (stamping `model` when the runner left it blank).
+ *
+ * Per model: a *transient* failure (load/throttle/network) is retried on the
+ * same model with exponential backoff up to `maxAttemptsPerModel`, before the
+ * router advances — so the model you actually asked for isn't demoted over a
+ * momentary blip. After attempts are exhausted (or for a non-same-model
+ * retryable like `unavailable`) it advances to the next candidate. A fatal error
+ * or chain exhaustion throws — the raw error for a single failed model, or an
+ * aggregate summarizing every model that failed.
  */
 export async function runWithFallback(
   chain: readonly string[],
   run: (model: string) => Promise<CompletionResult>,
+  options: FallbackOptions = {},
 ): Promise<CompletionResult> {
+  const policy: RetryPolicy = { ...DEFAULT_RETRY_POLICY, ...options.retry };
+  const sleep = options.sleep ?? realSleep;
+  const rand = options.rand ?? Math.random;
   const failures: { readonly model: string; readonly error: unknown }[] = [];
 
   for (let i = 0; i < chain.length; i++) {
     const model = chain[i]!;
     const isLast = i === chain.length - 1;
-    try {
-      const result = await run(model);
-      return result.model ? result : { ...result, model };
-    } catch (error) {
-      failures.push({ model, error });
-      if (isLast || !isRetryable(error)) {
-        throw failures.length > 1 ? aggregateError(failures) : error;
+
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const result = await run(model);
+        return result.model ? result : { ...result, model };
+      } catch (error) {
+        // Transient on this model: back off and retry the same model, bounded.
+        if (shouldRetrySameModel(error) && attempt < policy.maxAttemptsPerModel) {
+          const retryAfterMs = error instanceof ProviderError ? error.retryAfterMs : undefined;
+          await sleep(backoffDelayMs(attempt, policy, retryAfterMs, rand));
+          continue;
+        }
+        // Give up on this model: advance to the next candidate, or fail.
+        failures.push({ model, error });
+        if (isLast || !isRetryable(error)) {
+          throw failures.length > 1 ? aggregateError(failures) : error;
+        }
+        break;
       }
     }
   }

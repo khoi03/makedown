@@ -17,6 +17,7 @@ import { AnthropicProvider } from "./anthropic.js";
 import { OpenAICompatibleProvider } from "./openai.js";
 import { ProviderError } from "./errors.js";
 import { buildChain, runWithFallback } from "./fallback.js";
+import type { RetryPolicy } from "./retry.js";
 import { KNOWN_PROVIDERS, parseModelRef, type ModelRef } from "./model-ref.js";
 
 export { parseModelRef, type ModelRef };
@@ -26,6 +27,8 @@ export interface ProviderRouterConfig {
   readonly defaultProvider?: string;
   readonly anthropic?: { readonly apiKey: string; readonly baseUrl?: string };
   readonly openai?: { readonly apiKey: string; readonly baseUrl?: string };
+  /** Per-model retry/backoff overrides (merged over the defaults). */
+  readonly retry?: Partial<RetryPolicy>;
 }
 
 /** A Provider that routes each request to the configured backend for its model. */
@@ -76,18 +79,22 @@ export function createProviderRouter(config: ProviderRouterConfig): Provider {
         throw new Error("No model specified for a target — set `model:` in build.md");
       }
       const chain = buildChain(request.model, request.fallback, request.route, defaultProvider);
-      return runWithFallback(chain, async (ref) => {
-        const { provider, model } = parseModelRef(ref, defaultProvider);
-        const result = await get(provider).complete({
-          ...request,
-          model,
-          fallback: undefined,
-          route: undefined,
-        });
-        // Stamp the full `provider:model` ref as the producer, matching how the
-        // recipe expressed it — keeps provenance + analytics keys consistent.
-        return { ...result, model: ref };
-      });
+      return runWithFallback(
+        chain,
+        async (ref) => {
+          const { provider, model } = parseModelRef(ref, defaultProvider);
+          const result = await get(provider).complete({
+            ...request,
+            model,
+            fallback: undefined,
+            route: undefined,
+          });
+          // Stamp the full `provider:model` ref as the producer, matching how the
+          // recipe expressed it — keeps provenance + analytics keys consistent.
+          return { ...result, model: ref };
+        },
+        { retry: config.retry },
+      );
     },
   };
 }

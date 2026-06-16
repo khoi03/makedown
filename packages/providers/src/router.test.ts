@@ -64,7 +64,8 @@ describe("createProviderRouter", () => {
   });
 
   it("falls back to the next model on a transient error and records the actual model", async () => {
-    const router = createProviderRouter({ anthropic: { apiKey: "k" } });
+    // maxAttemptsPerModel:1 isolates the advance path (per-model retry tested below).
+    const router = createProviderRouter({ anthropic: { apiKey: "k" }, retry: { maxAttemptsPerModel: 1 } });
     const spy = vi
       .spyOn(AnthropicProvider.prototype, "complete")
       .mockRejectedValueOnce(new ProviderError("429", "rate_limit", "anthropic", 429))
@@ -80,6 +81,29 @@ describe("createProviderRouter", () => {
     expect(result.text).toBe("second");
     expect(result.model).toBe("anthropic:claude-sonnet-4-6");
     expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries the SAME model on a transient error before demoting (records the primary)", async () => {
+    // 0ms backoff keeps the test instant while exercising the real retry loop.
+    const router = createProviderRouter({
+      anthropic: { apiKey: "k" },
+      retry: { maxAttemptsPerModel: 3, baseDelayMs: 0, maxDelayMs: 0, jitter: false },
+    });
+    const spy = vi
+      .spyOn(AnthropicProvider.prototype, "complete")
+      .mockRejectedValueOnce(new ProviderError("429", "rate_limit", "anthropic", 429))
+      .mockResolvedValueOnce({ text: "primary recovered", usage: { input: 1, output: 1 } });
+
+    const result = await router.complete({
+      model: "anthropic:claude-opus-4-8",
+      fallback: ["anthropic:claude-sonnet-4-6"],
+      prompt: "p",
+      params: {},
+    });
+
+    expect(result.text).toBe("primary recovered");
+    expect(result.model).toBe("anthropic:claude-opus-4-8"); // never demoted
+    expect(spy).toHaveBeenCalledTimes(2); // both calls on the primary
   });
 
   it("skips an unconfigured fallback provider rather than failing the chain", async () => {
