@@ -12,6 +12,8 @@ import "./import.css";
 export interface ImportControlProps {
   readonly api: ApiClient;
   readonly workspaceId: string;
+  /** Called with the new source's path after a successful import (e.g. to open it). */
+  readonly onImported?: (path: string) => void;
 }
 
 type State =
@@ -20,7 +22,7 @@ type State =
   | { readonly kind: "done"; readonly path: string; readonly cached: boolean }
   | { readonly kind: "error"; readonly message: string };
 
-export function ImportControl({ api, workspaceId }: ImportControlProps) {
+export function ImportControl({ api, workspaceId, onImported }: ImportControlProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<State>({ kind: "idle" });
 
@@ -34,6 +36,7 @@ export function ImportControl({ api, workspaceId }: ImportControlProps) {
       const base64 = await fileToBase64(file);
       const result = await api.importSource(workspaceId, file.name, base64);
       setState({ kind: "done", path: result.path, cached: result.cached });
+      onImported?.(result.path);
     } catch (err) {
       setState({ kind: "error", message: err instanceof Error ? err.message : "Import failed" });
     }

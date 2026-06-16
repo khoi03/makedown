@@ -10,8 +10,12 @@ import type { ApiClient } from "../lib/api.js";
 import type { GraphView } from "../lib/types.js";
 import { useCollaborativeDoc, type LocalUser } from "../hooks/useCollaborativeDoc.js";
 import { useBuildStream } from "../hooks/useBuildStream.js";
+import { useSourcePaths } from "../hooks/useSourcePaths.js";
+import { useActiveFile } from "../hooks/useActiveFile.js";
+import { fileText } from "../lib/doc.js";
 import { Toolbar, type Presence } from "./toolbar/Toolbar.js";
 import { EditorPane } from "./editor/EditorPane.js";
+import { SourcesPanel } from "./sources/SourcesPanel.js";
 import { ImportControl } from "./import/ImportControl.js";
 import { GraphPane } from "./graph/GraphPane.js";
 import { InspectorPane } from "./inspector/InspectorPane.js";
@@ -35,6 +39,9 @@ export function Workbench({ api, workspaceId, user, onBack }: WorkbenchProps) {
   const [peers, setPeers] = useState<Presence[]>([]);
   const [jobId, setJobId] = useState<string>();
   const [generation, setGeneration] = useState(0);
+  const sourcePaths = useSourcePaths(doc);
+  const { activeFile, openFile, requestOpen } = useActiveFile(sourcePaths);
+  const activeText = useMemo(() => fileText(doc, activeFile), [doc, activeFile]);
 
   const eventsUrl = jobId ? api.buildEventsUrl(jobId) : undefined;
   const stream = useBuildStream(jobId, eventsUrl);
@@ -158,11 +165,17 @@ export function Workbench({ api, workspaceId, user, onBack }: WorkbenchProps) {
       <div className="workbench__panes">
         <section className="pane">
           <div className="pane__header">
-            <span className="pane__title">build.md</span>
-            <ImportControl api={api} workspaceId={workspaceId} />
+            <span className="pane__title">Files</span>
+            <ImportControl api={api} workspaceId={workspaceId} onImported={requestOpen} />
           </div>
-          <div className="pane__body">
-            <EditorPane doc={doc} awareness={awareness} />
+          <div className="pane__body files">
+            <SourcesPanel paths={sourcePaths} activeFile={activeFile} onOpen={openFile} />
+            <div className="files__editor">
+              <div className="files__active mono" data-testid="active-file">
+                {activeFile}
+              </div>
+              <EditorPane text={activeText} awareness={awareness} />
+            </div>
           </div>
         </section>
 

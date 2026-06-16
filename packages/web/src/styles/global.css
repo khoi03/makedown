@@ -139,6 +139,34 @@ code,
   overflow: auto;
 }
 
+/* Files pane: a sources sidebar beside the editor. */
+.files {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.32fr) 1fr;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.files__editor {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.files__active {
+  flex: 0 0 auto;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--accent);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-sunken);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 980px) {
   .workbench__panes {
     grid-template-columns: 1fr;

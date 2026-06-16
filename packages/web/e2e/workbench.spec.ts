@@ -67,6 +67,29 @@ test.describe("workbench", () => {
     await viewer.close();
   });
 
+  test("files sidebar lists sources and opens one in the editor", async ({ page }) => {
+    await page.goto("/#/demo");
+
+    // build.md loads in the editor and is the active file.
+    await expect(page.getByTestId("editor")).toContainText("target: shout");
+    await expect(page.getByTestId("active-file")).toHaveText("build.md");
+
+    // The Files sidebar lists the workspace source declared in build.md.
+    const noteItem = page.getByRole("button", { name: "sources/note.md" });
+    await expect(noteItem).toBeVisible();
+
+    // Opening it swaps the editor to the source content and marks it active.
+    await noteItem.click();
+    await expect(page.getByTestId("active-file")).toHaveText("sources/note.md");
+    await expect(noteItem).toHaveAttribute("aria-current", "true");
+    await expect(page.getByTestId("editor")).toContainText("hello from makedown");
+
+    // Switching back to build.md works.
+    await page.getByRole("button", { name: "build.md", exact: true }).click();
+    await expect(page.getByTestId("active-file")).toHaveText("build.md");
+    await expect(page.getByTestId("editor")).toContainText("target: shout");
+  });
+
   test("live edits sync between two clients without duplicating", async ({ browser }) => {
     const ctxA = await browser.newContext();
     const ctxB = await browser.newContext();
