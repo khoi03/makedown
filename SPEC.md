@@ -193,6 +193,14 @@ unconfigured provider in the chain is skipped too. It stops immediately on a
 since another model won't help. If the whole chain fails, the build errors with
 a summary of every attempt.
 
+A transient *load/throttle/network* failure (`429`/`503`/`5xx`/timeout) is first
+**retried on the same model** with capped exponential backoff + jitter (default 3
+attempts) before the router demotes to the next candidate — so a momentary blip on
+the model you asked for doesn't needlessly downgrade quality or cost. A `429`/`503`
+`Retry-After` header is honored when present. Model-unavailable (`404`) skips the
+same-model retry and advances at once. These retries are **runtime-only**: they
+never affect a target's identity hash, caching, or provenance.
+
 `fallback` and `route` may also be set under front-matter `defaults:` to apply to
 every target that doesn't declare its own (like `defaults.model`); a target's own
 values win.
