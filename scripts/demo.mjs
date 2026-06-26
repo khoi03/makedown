@@ -50,8 +50,7 @@ export const DEMO_STEPS = [
     title: "Build the deterministic part — auto-import + transform, zero tokens",
     argv: ["build", SHOWCASE_DIR],
     keyFree: true,
-    needsMarkitdown: true,
-    note: "Builds `extract`; the model steps are deferred until you add a key.",
+    note: "Builds `extract` (needs MarkItDown); the model steps are deferred until you add a key.",
   },
   {
     title: "Full provenance for the extract artifact",
@@ -84,11 +83,6 @@ export function liveSteps(steps = DEMO_STEPS) {
 /** Absolute path to the built CLI entry (`packages/cli/dist/index.js`). */
 export function cliEntry() {
   return join(ROOT, "packages", "cli", "dist", "index.js");
-}
-
-/** Whether MarkItDown is reachable (PATH command or MAKEDOWN_MARKITDOWN_CMD). */
-export function markitdownAvailable() {
-  return Boolean(process.env["MAKEDOWN_MARKITDOWN_CMD"]);
 }
 
 /**
@@ -127,16 +121,11 @@ async function main() {
     console.log(`\n▶ ${step.title}`);
     console.log(`  $ md ${step.argv.join(" ")}\n`);
 
-    if (step.needsMarkitdown && !markitdownAvailable()) {
-      console.log("  (skipped — MarkItDown not detected. `pip install 'markitdown[all]'`");
-      console.log("   or set MAKEDOWN_MARKITDOWN_CMD, then re-run to build `extract`.)");
-      continue;
-    }
-
     const { code, stdout, stderr } = await runStep(step);
     if (stdout.trim()) console.log(indent(stdout.trim()));
-    // `build` exits non-zero only because the model steps are *deferred*, which is
-    // expected in the key-free demo — surface that note without failing the run.
+    // `build` exits non-zero when the model steps are *deferred* (expected here) or
+    // when MarkItDown is missing — either way the CLI explains it on stderr, so
+    // surface that rather than guessing the environment, and never fail the demo.
     if (code !== 0 && stderr.trim()) console.log(indent(stderr.trim()));
   }
 
