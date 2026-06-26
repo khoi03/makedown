@@ -16,7 +16,17 @@ export default defineConfig({
   workers: 1,
   retries: process.env["CI"] ? 1 : 0,
   timeout: 60_000,
-  expect: { timeout: 15_000 },
+  expect: {
+    timeout: 15_000,
+    // Visual-regression tolerances. Baselines are platform-specific; regenerate
+    // with `pnpm exec playwright test --update-snapshots` on the canonical host.
+    toHaveScreenshot: {
+      maxDiffPixelRatio: 0.02,
+      animations: "disabled",
+      caret: "hide",
+      scale: "css",
+    },
+  },
   reporter: [["list"]],
   use: {
     baseURL: `http://localhost:${WEB_PORT}`,
