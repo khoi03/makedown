@@ -230,6 +230,7 @@ See [`CHANGELOG.md`](./CHANGELOG.md) for release history and
 - [`docs/SELF-HOSTING.md`](./docs/SELF-HOSTING.md) — run the collaborative app, teams, sharing.
 - [`docs/ROADMAP.md`](./docs/ROADMAP.md) — research dossier, architecture, roadmap.
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md) — dev setup, tests, and how to contribute.
+- [`docs/RELEASING.md`](./docs/RELEASING.md) — maintainer release & publish checklist.
 - [`LICENSING.md`](./LICENSING.md) — the dual-license model in detail.
 
 ## Contributing
