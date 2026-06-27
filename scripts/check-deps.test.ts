@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { findForbiddenImports, SERVER_PACKAGES, FRAMEWORK_PACKAGES } from "./check-deps.mjs";
 
 /**
- * The engine-standalone discipline (PLAN.md §15): the Apache-2.0 framework
+ * The engine-standalone discipline (docs/ROADMAP.md §15): the Apache-2.0 framework
  * packages must never import the AGPL server/collab ones, so the framework stays
  * dependency-light and cleanly Apache-2.0. This guard is the only thing that
  * keeps that true over time, so it gets real tests.

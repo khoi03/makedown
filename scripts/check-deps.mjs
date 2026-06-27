@@ -1,5 +1,5 @@
 /**
- * Engine-standalone guard (PLAN.md §15).
+ * Engine-standalone guard (docs/ROADMAP.md §15).
  *
  * Run via `node scripts/check-deps.mjs` (no shebang: it's imported by its test,
  * and a shebang line breaks transform-based importers like vitest).
