@@ -1,10 +1,10 @@
 {
   "name": "@makedown/web",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",
-  "description": "Collaborative Markdown editor + live DAG view + artifact viewer (React). AGPL-3.0 (dual-licensed; commercial exception available — see /LICENSING.md).",
+  "description": "Makedown collaborative web workbench (editor + DAG + inspector).",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
@@ -38,5 +38,24 @@
     "@vitejs/plugin-react": "^4.3.4",
     "jsdom": "^25.0.1",
     "vite": "^5.4.11"
-  }
+  },
+  "keywords": [
+    "llm",
+    "ai",
+    "build-system",
+    "makefile",
+    "markdown",
+    "incremental",
+    "content-addressed",
+    "dag",
+    "provenance"
+  ],
+  "homepage": "https://github.com/khoi03/makedown#readme",
+  "bugs": "https://github.com/khoi03/makedown/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/khoi03/makedown.git",
+    "directory": "packages/web"
+  },
+  "author": "khoi03"
 }

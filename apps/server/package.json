@@ -1,10 +1,10 @@
 {
   "name": "@makedown/server",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",
-  "description": "Server API: build orchestration, SSE, git snapshots, and (Phase 2.4) auth, team RBAC, shared artifact views. AGPL-3.0 (dual-licensed; commercial exception available — see /LICENSING.md).",
+  "description": "Makedown server: Fastify API, build orchestration, snapshots, sharing, and optional teams.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
@@ -42,5 +42,24 @@
     "@types/sanitize-html": "^2.16.1",
     "@types/ws": "^8.5.13",
     "y-protocols": "^1.0.6"
-  }
+  },
+  "keywords": [
+    "llm",
+    "ai",
+    "build-system",
+    "makefile",
+    "markdown",
+    "incremental",
+    "content-addressed",
+    "dag",
+    "provenance"
+  ],
+  "homepage": "https://github.com/khoi03/makedown#readme",
+  "bugs": "https://github.com/khoi03/makedown/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/khoi03/makedown.git",
+    "directory": "apps/server"
+  },
+  "author": "khoi03"
 }
