@@ -44,6 +44,34 @@ provenance (`md why` shows a "fell back from …" note when it differs). The
 `fallback`/`route` spec is part of the identity hash, so caching stays
 deterministic regardless of which model answered (see [`SPEC.md`](./SPEC.md) §4.2).
 
+## Guided demo
+
+[`examples/showcase`](./examples/showcase) is the flagship end-to-end workspace —
+one literate pipeline that exercises the whole product: a binary report is
+**auto-imported**, distilled by a deterministic **transform**, summarized by a
+cost-aware **chat** step that **falls back** across providers, and turned into a
+stakeholder memo by an **agent** behind a **human-approval gate**; the summary is
+then **shareable** as a self-contained artifact.
+
+```
+quarterly-report.html ──(auto-import)──► extract (transform) ──► summary (chat, fallback)
+                                                                    └──► memo (agent, approval)
+```
+
+The whole **planning + deterministic** slice runs with **no key and no spend**:
+
+```bash
+pnpm build                 # build the workspace packages the CLI imports
+node scripts/demo.mjs      # scripted walkthrough: status → graph → cost → build → why
+```
+
+`scripts/demo.mjs` drives the real `md` CLI and narrates each step. Building the
+`extract` target also needs [MarkItDown](https://github.com/microsoft/markitdown)
+(`pip install 'markitdown[all]'`); without it the build step is skipped with a
+hint. Add a key to `examples/showcase/.env` to run the live `summary`/`memo` steps
+— see [`examples/showcase/README.md`](./examples/showcase/README.md) for the full
+walkthrough.
+
 ## Step types
 
 A target's `step` decides how it computes (see [`SPEC.md`](./SPEC.md) §6):
