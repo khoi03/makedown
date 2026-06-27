@@ -212,6 +212,9 @@ export async function start(opts: ServerOptions): Promise<RunningServer> {
 async function main(): Promise<void> {
   const workspacesRoot = process.env["MAKEDOWN_WORKSPACES_ROOT"] ?? process.cwd();
   const port = Number(process.env["PORT"] ?? 4000);
+  // Bind loopback by default (safe for local runs); set HOST=0.0.0.0 to accept
+  // connections from other containers/hosts (e.g. behind the Docker nginx proxy).
+  const host = process.env["HOST"] ?? "127.0.0.1";
 
   // Auth/RBAC is opt-in: set DATABASE_URL to a Postgres instance to enable it.
   // Without it the server runs single-tenant (no login), exactly as before.
@@ -232,6 +235,7 @@ async function main(): Promise<void> {
   const server = await start({
     workspacesRoot,
     port,
+    host,
     logger: true,
     tenancy,
     sharing,

@@ -1,0 +1,50 @@
+# Makedown collaborative app — server (Fastify API + sync) behind an nginx-served
+# web build. Quick start:
+#
+#   docker compose up --build                      # → web at http://localhost:5173
+#   docker compose --profile teams up --build      # also start Postgres (then set DATABASE_URL below)
+#
+# By default the bundled examples/ are used as the workspaces root (baked into the
+# image). To serve your own workspaces, uncomment the bind mount + env below.
+# For team mode: start the `teams` profile AND uncomment DATABASE_URL on the server.
+
+services:
+  server:
+    build:
+      context: .
+      target: server
+    environment:
+      MAKEDOWN_WORKSPACES_ROOT: /app/examples
+      PORT: "4000"
+      # ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}   # for chat/agent/eval/map builds
+      # DATABASE_URL: postgres://postgres:dev@postgres:5432/makedown   # enable teams (with --profile teams)
+    # volumes:
+    #   - ./examples:/workspaces            # serve your own workspaces instead
+    # environment:
+    #   MAKEDOWN_WORKSPACES_ROOT: /workspaces
+    expose:
+      - "4000"
+
+  web:
+    build:
+      context: .
+      target: web
+    depends_on:
+      - server
+    ports:
+      - "5173:80"
+
+  # Optional Postgres for team mode. Enable with: docker compose --profile teams up
+  postgres:
+    image: postgres:16
+    profiles: [teams]
+    environment:
+      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: makedown
+    volumes:
+      - makedown-pg:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  makedown-pg:
