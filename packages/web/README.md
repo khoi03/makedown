@@ -15,4 +15,4 @@ and an empty state when there are no builds in range.
 
 **License:** **AGPL-3.0** (see [`LICENSE`](./LICENSE)) — dual-licensed; a
 commercial exception is available, see [`/LICENSING.md`](../../LICENSING.md) and
-`PLAN.md` §15.
+[`docs/ROADMAP.md`](../../docs/ROADMAP.md) §15.

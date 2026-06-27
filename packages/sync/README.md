@@ -8,5 +8,5 @@ The real-time collaboration layer:
 
 **License:** **AGPL-3.0** (see [`LICENSE`](./LICENSE)) — dual-licensed; a
 commercial exception is available, see [`/LICENSING.md`](../../LICENSING.md) and
-`PLAN.md` §15. The Apache-2.0 framework (e.g. `@makedown/engine`) must never
+[`docs/ROADMAP.md`](../../docs/ROADMAP.md) §15. The Apache-2.0 framework (e.g. `@makedown/engine`) must never
 import from here; the engine-standalone lint (`pnpm lint:deps`) enforces this.

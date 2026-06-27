@@ -1,21 +1,13 @@
-# Makedown — Plan & Research Dossier
+# Makedown — Roadmap & Research Dossier
 
-> **Working codename:** `Makedown` (= `make` + mark`down`). Telegraphs the whole thesis: a build system whose source files are Markdown. Rename later.
->
 > **One-line pitch:** *Make for LLM workflows.* A collaborative Markdown workspace where LLM/agent outputs are first-class, content-addressed, incrementally-rebuilt **build artifacts** in a dependency graph — literally "GNU Autotools × Notion."
 >
-> **Status:** Plan / pre-build. Saved 2026-06-09 so work can continue in a new session.
 > **Origin:** Patrick Collison (Stripe CEO) tweet, 2026-06-07, "I want some kind of LLM workflow tool… GNU Autotools x Notion or something. Is anyone building this?" (272K+ views).
 
----
-
-## ▶ Resuming in a new session
-
-1. Start the session **inside this directory** (`C:\Users\khoiv\Documents\Code\makedown` — moved out of OneDrive, now git-backed with a GitHub remote). This project has its own auto-memory, so the Makedown notes load automatically.
-2. Kick off with: **"Continue Makedown — read `PLAN.md` (§14 = current state) and `SPEC.md`, confirm where we are, then wait."**
-3. Expect the assistant to **verify before acting**: `pnpm install && pnpm -r build && pnpm -r test` should be green, then `node packages/cli/dist/index.js status examples/quickstart`.
-
-`PLAN.md` + `SPEC.md` are the durable source of truth (they travel with git); the auto-memory just makes the assistant reach for them unprompted.
+This document is the long-form background and roadmap: the research that motivated
+Makedown, the architecture, and the phase-by-phase build log (§14). To *use*
+Makedown start at the [README](../README.md); for the `build.md` format see
+[SPEC.md](../SPEC.md); for release history see [CHANGELOG.md](../CHANGELOG.md).
 
 ---
 
