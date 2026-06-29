@@ -115,7 +115,7 @@ export async function runSandboxedTransform(
       process.execPath,
       [
         `--max-old-space-size=${memoryMb}`,
-        "--permission",
+        permissionFlag(),
         `--allow-fs-read=${opts.scriptPath}`,
         runnerPath,
       ],
@@ -188,6 +188,20 @@ export async function runSandboxedTransform(
   } finally {
     await rm(runnerDir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+/**
+ * The Node flag that enables the permission model. It was renamed from
+ * `--experimental-permission` to `--permission` in Node 23.5.0, so a single
+ * literal breaks on the other side of that line (the project supports Node >= 20).
+ * The `--allow-fs-read`/`--allow-fs-write` sub-flags are unchanged across both.
+ */
+export function permissionFlag(): string {
+  const parts = process.versions.node.split(".");
+  const major = Number(parts[0] ?? 0);
+  const minor = Number(parts[1] ?? 0);
+  const stable = major > 23 || (major === 23 && minor >= 5);
+  return stable ? "--permission" : "--experimental-permission";
 }
 
 /**
