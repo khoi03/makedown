@@ -11,8 +11,7 @@
  * `@makedown/*` package. Run via `pnpm lint:deps`; the pure core is unit-tested
  * in `check-deps.test.ts`.
  */
-import { readFile } from "node:fs/promises";
-import { glob } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative } from "node:path";
 
@@ -55,14 +54,43 @@ export function findForbiddenImports(files) {
   return violations;
 }
 
+/** Source extensions to scan (excluding tests and type declarations). */
+const SOURCE_EXT = /\.(ts|tsx|mts|cts)$/;
+
+/**
+ * Recursively list framework source files under a directory. Uses readdir
+ * (Node 20-compatible) rather than `fs/promises` `glob`, which only lands in
+ * Node 22 — the project supports Node >= 20.
+ *
+ * @param {string} dir
+ * @returns {Promise<string[]>}
+ */
+async function listSourceFiles(dir) {
+  /** @type {string[]} */
+  const out = [];
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return out; // directory may not exist (e.g. a package without src yet)
+  }
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...(await listSourceFiles(full)));
+    } else if (SOURCE_EXT.test(entry.name) && !entry.name.includes(".test.") && !entry.name.endsWith(".d.ts")) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
 async function main() {
   const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
   /** @type {Record<string, string>} */
   const files = {};
   for (const dir of FRAMEWORK_DIRS) {
-    const pattern = join(repoRoot, dir, "src", "**", "*.{ts,tsx,mts,cts}");
-    for await (const entry of glob(pattern)) {
-      if (entry.includes(".test.") || entry.includes(".d.ts")) continue;
+    for (const entry of await listSourceFiles(join(repoRoot, dir, "src"))) {
       files[relative(repoRoot, entry).replaceAll("\\", "/")] = await readFile(entry, "utf8");
     }
   }
