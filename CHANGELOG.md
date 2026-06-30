@@ -6,6 +6,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-06-30
+
+### Fixed
+
+- **`@makedown/cli`**: the CLI now installs a **`makedown`** command. The previous
+  sole bin name `md` collides with a built-in on Windows (`md` is `mkdir` in both
+  cmd and PowerShell), so the CLI couldn't run there. `md` is kept as a secondary
+  alias (handy on macOS/Linux); use `makedown` everywhere, especially on Windows.
+
 ## [0.1.0] — 2026-06-30
 
 First public release. The full build log lives in
@@ -52,5 +61,6 @@ First public release. The full build log lives in
   `packages/sync`, `packages/web`), with a commercial exception available by
   contract. The `build.md` format (`SPEC.md`) is an open standard.
 
-[Unreleased]: https://github.com/khoi03/makedown/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/khoi03/makedown/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/khoi03/makedown/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/khoi03/makedown/releases/tag/v0.1.0

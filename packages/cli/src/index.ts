@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-/** `md` — the Makedown CLI. */
+/** `makedown` (alias `md`) — the Makedown CLI. */
+import { readFileSync } from "node:fs";
 import { Command } from "commander";
 import {
   cmdBuild,
@@ -13,12 +14,18 @@ import {
   cmdWhy,
 } from "./commands.js";
 
+// Read the version from this package's own package.json (one level up from the
+// compiled entry in dist/), so it never drifts from the published version.
+const { version } = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+) as { version: string };
+
 const program = new Command();
 
 program
-  .name("md")
+  .name("makedown")
   .description("Make for LLM workflows — incremental, content-addressed builds over Markdown.")
-  .version("0.0.0");
+  .version(version);
 
 program
   .command("init")

@@ -1,9 +1,10 @@
 {
   "name": "@makedown/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "license": "Apache-2.0",
   "bin": {
+    "makedown": "./dist/index.js",
     "md": "./dist/index.js"
   },
   "files": [
@@ -24,7 +25,7 @@
     "@makedown/shared": "workspace:*",
     "commander": "^12.1.0"
   },
-  "description": "Makedown CLI — incremental, content-addressed builds over Markdown (the `md` command).",
+  "description": "Makedown CLI — incremental, content-addressed builds over Markdown (the `makedown` command).",
   "keywords": [
     "llm",
     "ai",

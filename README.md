@@ -43,15 +43,18 @@ artifacts. Concretely, Makedown gives you:
 The CLI runs `build.md` graphs fully locally — no server, no database, Apache-2.0.
 
 ```bash
-npm install -g @makedown/cli        # installs the `md` command
-md init my-workspace                 # scaffold a build.md + sources/
+npm install -g @makedown/cli              # installs the `makedown` command
+makedown init my-workspace                 # scaffold a build.md + sources/
 cd my-workspace
-md status                            # what's stale and why
-md cost                              # token/$ estimate — no model calls
-export ANTHROPIC_API_KEY=sk-ant-...  # a key for the model steps (Windows: $env:ANTHROPIC_API_KEY)
-md build                             # incremental build — only stale targets recompute
-md why summary                       # full provenance for a target
+makedown status                            # what's stale and why
+makedown cost                              # token/$ estimate — no model calls
+export ANTHROPIC_API_KEY=sk-ant-...        # a key for the model steps (Windows: $env:ANTHROPIC_API_KEY)
+makedown build                             # incremental build — only stale targets recompute
+makedown why summary                       # full provenance for a target
 ```
+
+> The command is **`makedown`**. On macOS/Linux there's also a short alias **`md`**;
+> on Windows use `makedown` (the shell reserves `md` for `mkdir`).
 
 No key yet? You can still run the whole **planning + deterministic** slice
 (`status` / `graph` / `cost` / `why`, and `transform` builds) at zero cost. Try the
@@ -106,7 +109,7 @@ compare models across providers. A target can declare a **`fallback`** chain
 that actually produced each artifact is recorded in provenance. See
 [`SPEC.md`](./SPEC.md) for the full format.
 
-The `md` commands:
+The commands (shown with the `md` shorthand; use `makedown` on Windows):
 
 ```bash
 md build            # incremental build — only stale targets recompute
@@ -188,10 +191,11 @@ end-to-end test.
 
 ## Install
 
-**CLI (recommended)** — once published:
+**CLI (recommended):**
 
 ```bash
 npm install -g @makedown/cli
+makedown --help          # the command is `makedown` (alias `md` on macOS/Linux)
 ```
 
 **From source** (works today; also how you develop):
