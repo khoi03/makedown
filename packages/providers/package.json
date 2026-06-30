@@ -1,6 +1,6 @@
 {
   "name": "@makedown/providers",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
@@ -23,5 +23,28 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.102.0",
     "@makedown/shared": "workspace:*"
+  },
+  "description": "Model provider adapters (Anthropic + OpenAI-compatible) and cost accounting for Makedown.",
+  "keywords": [
+    "llm",
+    "ai",
+    "build-system",
+    "makefile",
+    "markdown",
+    "incremental",
+    "content-addressed",
+    "dag",
+    "provenance"
+  ],
+  "homepage": "https://github.com/khoi03/makedown#readme",
+  "bugs": "https://github.com/khoi03/makedown/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/khoi03/makedown.git",
+    "directory": "packages/providers"
+  },
+  "author": "khoi03",
+  "publishConfig": {
+    "access": "public"
   }
 }

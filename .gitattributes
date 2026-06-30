@@ -3,3 +3,10 @@
 # (scrambling edits). The server also normalizes on read, but keeping the repo's
 # own files LF avoids reintroducing CRLF via git core.autocrlf on Windows.
 *.md text eol=lf
+
+# Files that run inside Linux containers / shells must stay LF, or a CRLF checkout
+# on Windows breaks the shebang (`/bin/sh^M: bad interpreter`) and Docker build.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.conf text eol=lf
+*.mjs text eol=lf

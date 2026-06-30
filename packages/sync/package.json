@@ -1,10 +1,10 @@
 {
   "name": "@makedown/sync",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",
-  "description": "Real-time collaboration (Yjs CRDT) + git-backed workspace sync. AGPL-3.0 (dual-licensed; commercial exception available — see /LICENSING.md).",
+  "description": "Makedown collaborative sync: Yjs CRDT doc model, git backing, and WebSocket server.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -35,5 +35,24 @@
   },
   "peerDependencies": {
     "ws": "^8.18.0"
-  }
+  },
+  "keywords": [
+    "llm",
+    "ai",
+    "build-system",
+    "makefile",
+    "markdown",
+    "incremental",
+    "content-addressed",
+    "dag",
+    "provenance"
+  ],
+  "homepage": "https://github.com/khoi03/makedown#readme",
+  "bugs": "https://github.com/khoi03/makedown/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/khoi03/makedown.git",
+    "directory": "packages/sync"
+  },
+  "author": "khoi03"
 }

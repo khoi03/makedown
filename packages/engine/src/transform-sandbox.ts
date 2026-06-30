@@ -3,7 +3,8 @@
  *
  * A `transform` is workspace-authored code. To run an untrusted `build.md`
  * safely, the script runs in a forked Node child under the **permission model**
- * (`--permission` with a single allow-listed file) so it has:
+ * (read access allow-listed to just the runner entry + the one transform script)
+ * so it has:
  *   - **no ambient filesystem** access (it can't read/write anything, not even
  *     its own siblings — only the engine-resolved input *values* it is handed),
  *   - a **memory cap** (`--max-old-space-size`; an OOM aborts the child), and
@@ -115,8 +116,14 @@ export async function runSandboxedTransform(
       process.execPath,
       [
         `--max-old-space-size=${memoryMb}`,
-        "--permission",
+        permissionFlag(),
+        // Read access is limited to exactly two files: the transform script and
+        // our runner entry. Node 23.5+ implicitly grants reading the entry point,
+        // but Node 20-22's experimental model does not — without the runner on the
+        // allow-list the child dies with ERR_ACCESS_DENIED there. Separate flags
+        // (not comma-joined) so a comma in the temp path can't widen the list.
         `--allow-fs-read=${opts.scriptPath}`,
+        `--allow-fs-read=${runnerPath}`,
         runnerPath,
       ],
       // Scrub the environment: the permission model blocks filesystem but not
@@ -188,6 +195,20 @@ export async function runSandboxedTransform(
   } finally {
     await rm(runnerDir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+/**
+ * The Node flag that enables the permission model. It was renamed from
+ * `--experimental-permission` to `--permission` in Node 23.5.0, so a single
+ * literal breaks on the other side of that line (the project supports Node >= 20).
+ * The `--allow-fs-read`/`--allow-fs-write` sub-flags are unchanged across both.
+ */
+export function permissionFlag(): string {
+  const parts = process.versions.node.split(".");
+  const major = Number(parts[0] ?? 0);
+  const minor = Number(parts[1] ?? 0);
+  const stable = major > 23 || (major === 23 && minor >= 5);
+  return stable ? "--permission" : "--experimental-permission";
 }
 
 /**

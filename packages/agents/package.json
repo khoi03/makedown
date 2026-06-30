@@ -1,6 +1,6 @@
 {
   "name": "@makedown/agents",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
@@ -22,5 +22,28 @@
   },
   "dependencies": {
     "@makedown/shared": "workspace:*"
+  },
+  "description": "Coding-agent runner (Claude Agent SDK) for the Makedown agent step.",
+  "keywords": [
+    "llm",
+    "ai",
+    "build-system",
+    "makefile",
+    "markdown",
+    "incremental",
+    "content-addressed",
+    "dag",
+    "provenance"
+  ],
+  "homepage": "https://github.com/khoi03/makedown#readme",
+  "bugs": "https://github.com/khoi03/makedown/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/khoi03/makedown.git",
+    "directory": "packages/agents"
+  },
+  "author": "khoi03",
+  "publishConfig": {
+    "access": "public"
   }
 }

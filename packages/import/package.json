@@ -1,6 +1,6 @@
 {
   "name": "@makedown/import",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "license": "Apache-2.0",
   "main": "./dist/index.js",
@@ -19,5 +19,28 @@
     "typecheck": "tsc --noEmit",
     "clean": "tsc -b --clean",
     "test": "vitest run --passWithNoTests"
+  },
+  "description": "Any-file to Markdown importer (MarkItDown bridge) with content-addressed conversion cache for Makedown.",
+  "keywords": [
+    "llm",
+    "ai",
+    "build-system",
+    "makefile",
+    "markdown",
+    "incremental",
+    "content-addressed",
+    "dag",
+    "provenance"
+  ],
+  "homepage": "https://github.com/khoi03/makedown#readme",
+  "bugs": "https://github.com/khoi03/makedown/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/khoi03/makedown.git",
+    "directory": "packages/import"
+  },
+  "author": "khoi03",
+  "publishConfig": {
+    "access": "public"
   }
 }
