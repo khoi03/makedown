@@ -6,7 +6,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.1.0] — 2026-06-27
+## [0.1.0] — 2026-06-30
 
 First public release. The full build log lives in
 [`docs/ROADMAP.md`](./docs/ROADMAP.md) §14.
