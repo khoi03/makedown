@@ -3,7 +3,8 @@
  *
  * A `transform` is workspace-authored code. To run an untrusted `build.md`
  * safely, the script runs in a forked Node child under the **permission model**
- * (`--permission` with a single allow-listed file) so it has:
+ * (read access allow-listed to just the runner entry + the one transform script)
+ * so it has:
  *   - **no ambient filesystem** access (it can't read/write anything, not even
  *     its own siblings — only the engine-resolved input *values* it is handed),
  *   - a **memory cap** (`--max-old-space-size`; an OOM aborts the child), and
@@ -116,7 +117,13 @@ export async function runSandboxedTransform(
       [
         `--max-old-space-size=${memoryMb}`,
         permissionFlag(),
+        // Read access is limited to exactly two files: the transform script and
+        // our runner entry. Node 23.5+ implicitly grants reading the entry point,
+        // but Node 20-22's experimental model does not — without the runner on the
+        // allow-list the child dies with ERR_ACCESS_DENIED there. Separate flags
+        // (not comma-joined) so a comma in the temp path can't widen the list.
         `--allow-fs-read=${opts.scriptPath}`,
+        `--allow-fs-read=${runnerPath}`,
         runnerPath,
       ],
       // Scrub the environment: the permission model blocks filesystem but not

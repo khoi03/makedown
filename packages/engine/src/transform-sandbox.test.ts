@@ -73,9 +73,12 @@ describe("runSandboxedTransform", () => {
       `export default () => { const a = []; for (;;) a.push(new Array(1e6).fill(7)); };`,
     );
     await expect(
-      runSandboxedTransform({ scriptPath: p, inputs: {}, memoryMb: 64, timeoutMs: 15000 }),
+      runSandboxedTransform({ scriptPath: p, inputs: {}, memoryMb: 64, timeoutMs: 20000 }),
     ).rejects.toThrow(/memory|crashed|exited/i);
-  });
+    // Hitting the heap cap can take several seconds on slower runners (~7s on a
+    // Node 20 CI box), so this test needs a vitest timeout above the default 5s
+    // and below the sandbox's own 20s cap so the OOM (not the time cap) wins.
+  }, 25_000);
 
   it("isolates the result from the script's stdout noise", async () => {
     const p = await script(
